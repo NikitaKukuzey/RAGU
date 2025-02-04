@@ -1,127 +1,111 @@
-from base_chunker import BaseChunker
-
-from abc import ABC, abstractmethod
-from typing import List, Tuple
-import os
+from typing import List
 import codecs
 import numpy as np
 import torch
-from transformers import RobertaTokenizer, RobertaModel
+from transformers import AutoTokenizer, AutoModel
+from razdel import sentenize
+
+from src.chunker.base_chunker import BaseChunker
 
 
 class SimpleChunker(BaseChunker):
     def __init__(self, config):
         super().__init__(config)
-        self.chunk_size = config['chunk_size']
-        self.chunk_overlap = config['chunk_overlap']
+        self.max_chunk_size = config.max_chunk_size
 
     def get_chunks(self, documents: list):
         chunks = []
         for document in documents:
             for i in range(0, len(document), self.chunk_size - self.chunk_overlap):
-                chunk = document[i:i + self.chunk_size]
+                chunk = document[i : i + self.chunk_size]
                 chunks.append(chunk)
         return chunks
 
 
 class SemanticTextChunker(BaseChunker):
     def __init__(
-            self,
-            config: dict,
-            tokenizer: RobertaTokenizer,
-            model: RobertaModel
+        self,
+        config: dict,
     ):
         super().__init__(config)
-        self.tokenizer = tokenizer
-        self.model = model.to(self.get_device())
+
+        self.tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+        self.model = AutoModel.from_pretrained(config.model_name).to(
+            self.get_device()
+        )
+        self.model.eval()
 
     @staticmethod
     def get_device():
-        return 'cuda' if torch.cuda.is_available() else 'cpu'
+        return "cuda" if torch.cuda.is_available() else "cpu"
 
     def load_text(self, file_path: str) -> List[str]:
-        with codecs.open(file_path, mode='r', encoding='utf-8') as fp:
-            return [line.strip() for line in fp.readlines()]
+        with codecs.open(file_path, mode="r", encoding="utf-8") as fp:
+            return fp.read().strip()
 
     def split_text_by_chunks(self, text: List[str]) -> List[str]:
-        chunks = []
-        new_chunk = ''
-        empty_count = 0
-
-        for line in text:
-            if not line:
-                empty_count += 1
-                if empty_count >= 3:
-                    empty_count = 0
-                    new_chunk = new_chunk.strip()
-                    if new_chunk:
-                        chunks.append(new_chunk)
-                    new_chunk = ''
-            else:
-                empty_count = 0
-                new_chunk += (line + '\n')
-
-        if new_chunk.strip():
-            chunks.append(new_chunk.strip())
-
-        return chunks
+        return [mini_chunk.text for mini_chunk in list(sentenize(text))]
 
     def calculate_document_embedding(self, document: str) -> np.ndarray:
         inputs = self.tokenizer(
-            ['search_document: ' + document],
+            ["search_document: " + document],
             max_length=512,
             padding=True,
             truncation=True,
-            return_tensors='pt'
-        )
-
-        inputs = inputs.to(self.model.device)
+            return_tensors="pt",
+        ).to(self.model.device)
 
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        return torch.nn.functional.normalize(
-            outputs.last_hidden_state[:, 0],
-            p=2,
-            dim=1
-        ).cpu().numpy()
+        return (
+            torch.nn.functional.normalize(outputs.last_hidden_state[:, 0], p=2, dim=1)
+            .cpu()
+            .numpy()
+        )
 
-    def compute_similarities(
-            self,
-            chunks:
-            List[str]
-    ) -> np.ndarray:
+    def compute_similarities(self, chunks: List[str]) -> np.ndarray:
+        if len(chunks) < 2:
+            return torch.tensor([])
+
         embeddings = np.vstack(
             [self.calculate_document_embedding(chunk) for chunk in chunks]
         )
-        return np.array(
-            [(embeddings[idx] @ embeddings[idx + 1].T)[0] for idx in range(len(chunks) - 1)]
-        )
+        return torch.tensor(
+            [(embeddings[idx : (idx + 1)] @ embeddings[(idx + 1) : (idx + 2)].T).tolist()[0]
+                for idx in range(len(chunks) - 1)
+            ]
+        ).reshape((len(chunks) - 1,))
 
-    def join_chunks_by_semantics(
-            self,
-            chunks: List[str],
-            similarities: np.ndarray
-    ) -> List[str]:
+    def join_chunks_by_semantics(self, chunks: List[str], similarities_between_neighbors: np.ndarray) -> List[str]:
         if len(chunks) < 2:
             return chunks
+  
+        n_tokens = len(self.tokenizer.tokenize('search_document: ' + '\n'.join(chunks)))
 
-        max_text_len = 512
-        num_tokens = len(self.tokenizer.tokenize('search_document: ' + '\n'.join(chunks)))
-
-        if num_tokens <= max_text_len:
+        if n_tokens <= self.config.max_chunk_size:
             return ['\n'.join(chunks)]
+        
+        min_similarity_idx = torch.argmin(similarities_between_neighbors)
 
-        min_sim_idx = np.argmin(similarities)
-
-        left_chunks = self.join_chunks_by_semantics(chunks[:min_sim_idx + 1], similarities[:min_sim_idx])
-        right_chunks = self.join_chunks_by_semantics(chunks[min_sim_idx + 1:], similarities[min_sim_idx + 1:])
-
-        return left_chunks + right_chunks
-
+        if min_similarity_idx == 0:
+            res = [chunks[0]]
+        else:
+            res = self.join_chunks_by_semantics(
+                chunks[:(min_similarity_idx + 1)],
+                similarities_between_neighbors[:min_similarity_idx]
+            )
+        if min_similarity_idx == (len(chunks) - 2):
+            res += [chunks[-1]]
+        else:
+            res += self.join_chunks_by_semantics(
+                chunks[(min_similarity_idx + 1):], 
+                similarities_between_neighbors[(min_similarity_idx + 1):]
+            )
+        return res
+    
     def get_chunks(self, file_path: str) -> List[str]:
         text = self.load_text(file_path)
         chunks = self.split_text_by_chunks(text)
-        similarities = self.compute_similarities(chunks) if len(chunks) > 1 else np.array([])
+        similarities = self.compute_similarities(chunks)
         return self.join_chunks_by_semantics(chunks, similarities)
-
