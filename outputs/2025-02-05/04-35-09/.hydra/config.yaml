@@ -1,0 +1,13 @@
+llm:
+  model: meta-llama/llama-3.1-8b-instruct
+chunker:
+  class_name: simple
+  max_chunk_size: 500
+triplet:
+  class_name: original
+graph:
+  class_name: original
+generator:
+  class_name: original
+  summary_system_prompt: null
+  final_system_prompt: null

@@ -1,0 +1,6 @@
+defaults:
+  - llm: llama3.1-8b
+  - chunker: simple_chunker
+  - triplet: original
+  - graph: original
+  - generator: original

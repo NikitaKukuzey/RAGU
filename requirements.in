@@ -1,0 +1,19 @@
+
+hydra-core
+transformers
+torch
+numpy
+
+pydantic
+python-dotenv
+pydantic-settings
+pre-commit
+
+matplotlib
+openai
+cdlib
+networkx
+razdel
+
+# Additional packages
+leidenalg

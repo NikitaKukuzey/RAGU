@@ -1,0 +1,3 @@
+chunker:
+  model_name: ai-forever/FRIDA
+  max_chunk_size: 512

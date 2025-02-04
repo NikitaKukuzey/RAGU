@@ -1,0 +1,9 @@
+llm:
+  model: awesome-llm
+chunker: {}
+triplet: {}
+graph: {}
+generator:
+  __target__: src.generate.OriginalGenerator
+  summary_system_prompt: null
+  final_system_prompt: null

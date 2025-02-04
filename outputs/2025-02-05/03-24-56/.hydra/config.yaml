@@ -1,0 +1,10 @@
+llm:
+  model: meta-llama/llama-3.1-8b-instruct
+chunker:
+  __target__: src.chunker.chunkers.SimpleChunker
+triplet: {}
+graph: {}
+generator:
+  __target__: src.generate.OriginalGenerator
+  summary_system_prompt: null
+  final_system_prompt: null

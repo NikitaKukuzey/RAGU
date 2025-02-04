@@ -1,0 +1,2 @@
+defaults:
+  - chunker: semantic_chunker
