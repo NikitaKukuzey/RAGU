@@ -1,4 +1,0 @@
-chunker:
-  type: semantic
-  model_name: ai-forever/ru-en-RoSBERTa
-  max_chunk_size: 512
