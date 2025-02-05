@@ -4,7 +4,7 @@ from environment import Registrable
 
 
 class Chunker(ABC, Registrable):
-    def __init__(self, config):
+    def __init__(self, config: dict=None):
         self.config = config 
     
     @abstractmethod
