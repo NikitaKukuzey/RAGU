@@ -1,1 +1,4 @@
 class_name: original
+model_name: 'openai/gpt-4o-mini'
+element_summary_prompt: 'Summarize the following entities and relationships in a structured format. Use \"->\" to represent relationships, after the \"Relationships:\" word.'
+community_summary_prompt: 'Summarize the following community of entities and relationships.'
