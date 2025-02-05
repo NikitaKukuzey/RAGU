@@ -4,9 +4,10 @@ from environment import Registrable
 
 
 class Generator(ABC, Registrable):
-    def __init__(self, client, config):
-        self.client = client
-        self.config = config
+    def __init__(self):
+        ...
+        # self.client = client
+        # self.config = config
 
     @abstractmethod
     def generate_final_answer(self, community_summaries, query):

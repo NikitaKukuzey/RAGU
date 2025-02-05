@@ -1,32 +1,33 @@
 from ragu.generate.base_generator import Generator
 
 
-Generator.register("original-generator")
+@Generator.register("original_generator")
 class OriginalGenerator(Generator):
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, class_name, model_name: str, system_prompt: str):
+        super().__init__()
+        self.model_name = model_name
+        self.system_prompt = system_prompt
 
-    def generate_final_answer(self, community_summaries, query, client):
+    def generate_final_answer(self, query, community_summaries, client):
         intermediate_answers = []
         for index, summary in enumerate(community_summaries):
             print(f"Summary index {index} of {len(community_summaries)}:")
             response = client.chat.completions.create(
-                model=self.config.llm.model,
+                model=self.model_name,
                 messages=[
-                    {"role": "system",
-                        "content": self.config.generator.original.summary_system_prompt},
+                    {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": f"Query: {query} Summary: {summary}"}
                 ]
             )
             print("Intermediate answer:", response.choices[0].message.content)
             intermediate_answers.append(
-                response.choices[0].message.content)
+                response.choices[0].message.content
+            )
 
         final_response = client.chat.completions.create(
-            model=self.config.llm.model,
+            model=self.model_name,
             messages=[
-                {"role": "system",
-                 "content": self.config.generator.original.final_system_prompt},
+                {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f"Intermediate answers: {intermediate_answers}"}
             ]
         )
