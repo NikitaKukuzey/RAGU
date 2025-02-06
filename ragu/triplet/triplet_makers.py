@@ -1,4 +1,6 @@
 from typing import Any, List, Optional
+
+from tqdm import tqdm
 import opennre
 from ragu.triplet.base_triplet import TripletExtractor
 
@@ -20,7 +22,7 @@ class TripletLLM(TripletExtractor):
         super().__init__()
         self.model_name = model_name
 
-    def extract_entities_and_relationships(self, text: str, client: Any) -> List[Any]:
+    def extract_entities_and_relationships(self, elements: List[str], client: Any) -> List[Any]:
         """
         Uses an LLM to extract entities and relationships from the input text.
 
@@ -31,14 +33,18 @@ class TripletLLM(TripletExtractor):
         from ragu.utils.default_prompts.triplet_maker_prompts import tripler_system_prompts
         from ragu.utils.triplet_parser import parse_relations
 
-        response = client.chat.completions.create(
-            model=self.model_name,
-            messages=[
-                {"role": "system", "content": tripler_system_prompts},
-                {"role": "user", "content": text}
-            ]
-        )
-        return parse_relations(response.choices[0].message.content)
+        results = []
+        for text in tqdm(elements, desc='Index create: extract entities'):
+            response = client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": tripler_system_prompts},
+                    {"role": "user", "content": text}
+                ]
+            )
+            response = parse_relations(response.choices[0].message.content)
+            results.extend(response)
+        return results
 
 
 @TripletExtractor.register("opennre")

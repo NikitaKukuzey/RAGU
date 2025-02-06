@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from common import Registrable
+from ragu.common import Registrable
 
 
 class TripletExtractor(ABC, Registrable):
@@ -19,7 +19,7 @@ class TripletExtractor(ABC, Registrable):
         self.config = config
 
     @abstractmethod
-    def extract_entities_and_relationships(self, text: str, client: Any) -> List[Any]:
+    def extract_entities_and_relationships(self, text: List[str], client: Any) -> List[Any]:
         """
         Abstract method for extracting entities and relationships from a given text.
         Must be implemented in subclasses.
@@ -38,8 +38,4 @@ class TripletExtractor(ABC, Registrable):
         :param client: External client for processing, if required.
         :return: A list of extracted triplets from all elements.
         """
-        results = []
-        for index, element in enumerate(elements):
-            result = self.extract_entities_and_relationships(element, client)
-            results.extend(result)
-        return results
+        return self.extract_entities_and_relationships(elements, client)
