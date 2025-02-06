@@ -1,118 +1,110 @@
 import networkx as nx
+from tqdm import tqdm
 from cdlib import algorithms
+from typing import List, Tuple, Callable, Any
 
 
-# 3. Element Instances → Element Summaries
-def summarize_elements(elements, client, config):
+def detect_communities(graph: nx.Graph) -> List[str]:
+    """
+    Detects communities in the graph and represents them as strings.
+
+    Each community is a set of connected nodes, and the function extracts
+    edge information to create a textual representation of each community.
+    
+    :param graph: NetworkX graph.
+    :return: List of community representations as strings.
+    """
+    communities_content = []
+    for component in nx.connected_components(graph):
+        subgraph = graph.subgraph(component)
+        component_content = [f"{u} {attrs['label']} {v}" for u, v, attrs in subgraph.edges(data=True)]
+        communities_content.append(". ".join(component_content))
+    return communities_content
+
+
+def get_community_summary(texts: List[str], client: Any, config: Any) -> List[str]:
+    """
+    Generates summaries for detected communities using a language model.
+
+    :param texts: List of community descriptions.
+    :param client: API client for interacting with the language model.
+    :param config: Configuration object containing model parameters.
+    :return: List of summaries for each community.
+    """
+    from ragu.utils.default_prompts.community_summary_prompt import prompt
+    
     summaries = []
-    for index, element in enumerate(elements):
-        print(f"Element index {index} of {len(elements)}:")
+    for text in tqdm(texts, desc='Index create: community summary'):
         response = client.chat.completions.create(
-            model=config.llm.model,
+            model=config.model_name,
             messages=[
-                {"role": "system", "content": config.graph.summarize_elements.system_prompt},
-                {"role": "user", "content": element}
-            ]
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": text},
+            ],
         )
-        print("Element summary:", response.choices[0].message.content)
-        summary = response.choices[0].message.content
-        summaries.append(summary)
+        summaries.append(response.choices[0].message.content.strip())
     return summaries
 
 
-# 4. Element Summaries → Graph Communities
-def build_graph_from_summaries(summaries):
-    G = nx.Graph()
-    for index, summary in enumerate(summaries):
-        print(f"Summary index {index} of {len(summaries)}:")
-        lines = summary.split("\n")
-        entities_section = False
-        relationships_section = False
-        entities = []
-        for line in lines:
-            if line.startswith("### Entities:") or line.startswith("**Entities:**"):
-                entities_section = True
-                relationships_section = False
-                continue
-            elif line.startswith("### Relationships:") or line.startswith("**Relationships:**"):
-                entities_section = False
-                relationships_section = True
-                continue
-            if entities_section and line.strip():
-                if line[0].isdigit() and line[1] == ".":
-                    line = line.split(".", 1)[1].strip()
-                entity = line.strip()
-                entity = entity.replace("**", "")
-                entities.append(entity)
-                G.add_node(entity)
-            elif relationships_section and line.strip():
-                parts = line.split("->")
-                if len(parts) >= 2:
-                    source = parts[0].strip()
-                    target = parts[-1].strip()
-                    relation = " -> ".join(parts[1:-1]).strip()
-                    G.add_edge(source, target, label=relation)
-    return G
+def build_graph(relations: List[Tuple[str, str, str]]) -> nx.Graph:
+    """
+    Constructs a graph from a list of entity-relation-entity triplets.
+
+    :param relations: List of (entity1, relation, entity2) tuples.
+    :return: NetworkX graph with labeled edges.
+    """
+    graph = nx.Graph()
+    for entity1, relation, entity2 in relations:
+        graph.add_edge(entity1, entity2, label=relation)
+    return graph
 
 
-# 5. Graph Communities → Community Summaries
-def detect_communities(graph):
-    communities = []
-    index = 0
-    for component in nx.connected_components(graph):
-        print(
-            f"Component index {index} of {len(list(nx.connected_components(graph)))}:")
-        subgraph = graph.subgraph(component)
-        if len(subgraph.nodes) > 1:  # Leiden algorithm requires at least 2 nodes
-            try:
-                sub_communities = algorithms.leiden(subgraph)
-                for community in sub_communities.communities:
-                    communities.append(list(community))
-            except Exception as e:
-                print(f"Error processing community {index}: {e}")
-        else:
-            communities.append(list(subgraph.nodes))
-        index += 1
-    print("Communities from detect_communities:", communities)
-    return communities
+class GraphBuilder:
+    """
+    Graph processing pipeline that builds a graph, detects communities,
+    and generates summaries for each community.
+    """
+    
+    def __init__(
+        self,
+        client: Any,
+        config: Any,
+        graph_builder_func: Callable[[List[Tuple[str, str, str]]], nx.Graph] = build_graph,
+        detect_communities_func: Callable[[nx.Graph], List[str]] = detect_communities,
+        get_community_summary_func: Callable[[List[str], Any, Any], List[str]] = get_community_summary,
+    ) -> None:
+        """
+        Initializes the GraphBuilder with the necessary components.
 
-
-def summarize_communities(communities, graph, client, config):
-    community_summaries = []
-    for index, community in enumerate(communities):
-        print(f"Summarize Community index {index} of {len(communities)}:")
-        subgraph = graph.subgraph(community)
-        nodes = list(subgraph.nodes)
-        edges = list(subgraph.edges(data=True))
-        description = "Entities: " + ", ".join(nodes) + "\nRelationships: "
-        relationships = []
-        for edge in edges:
-            relationships.append(
-                f"{edge[0]} -> {edge[2]['label']} -> {edge[1]}")
-        description += ", ".join(relationships)
-
-        response = client.chat.completions.create(
-            model=config.llm.model,
-            messages=[
-                {"role": "system",
-                    "content": config.graph.summarize_communities.system_prompt},
-                {"role": "user", "content": description}
-            ]
-        )
-        summary = response.choices[0].message.content.strip()
-        community_summaries.append(summary)
-    return community_summaries
-
-
-class GraphBuilder():
-    def __init__(self, client, config):
+        :param client: API client for community summarization.
+        :param config: Configuration object containing model parameters.
+        :param graph_builder_func: Function to construct a graph from triplets.
+        :param get_community_summary_func: Function to summarize detected communities.
+        :param detect_communities_func: Function to detect communities in a graph.
+        """
         self.client = client
         self.config = config
+        self.graph_builder_func = graph_builder_func
+        self.get_community_summary_func = get_community_summary_func
+        self.detect_communities_func = detect_communities_func
 
-    def __call__(self, elements, *args, **kwds):
-        elements_summaries = summarize_elements(elements)
-        G = build_graph_from_summaries(elements_summaries)
-        communities = detect_communities(G)
-        communities_summaries = summarize_communities(communities)
-        
-        return G, communities_summaries
+    def __call__(
+            self, 
+            triplets: List[Tuple[str, str, str]], 
+            *args, 
+            **kwargs
+        ) -> Tuple[nx.Graph, List[str]]:
+        """
+        Executes the graph processing pipeline.
+
+        :param triplets: List of (entity1, relation, entity2) tuples.
+        :return: Tuple containing the built graph and a list of community summaries.
+        """
+        graph = self.graph_builder_func(triplets)
+        communities = self.detect_communities_func(graph)
+        communities_summaries = self.get_community_summary_func(
+            communities, 
+            self.client, 
+            self.config
+        )
+        return graph, communities_summaries
