@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from common import Registrable
+from ragu.common import Registrable
 
 
 class Chunker(ABC, Registrable):
