@@ -1,3 +1,4 @@
+from typing import ClassVar
 from pydantic_settings import BaseSettings
 
 
@@ -15,7 +16,7 @@ class Registrable:
     :param **kwargs: Keyword arguments passed to the constructor of the registered class.
     :return: A subclass of the `Registrable` class, instantiated with the provided arguments.
     """
-    _registry: dict = {}
+    _registry: ClassVar[dict] = {}
 
     @classmethod
     def register(cls, name: str):
