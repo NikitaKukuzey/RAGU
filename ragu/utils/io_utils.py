@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import List
 
 
-def read_text_from_files(directory: str, file_extensions=None):
+def read_text_from_files(directory: str, file_extensions=None) -> List[str]:
     """
     Чтение текста из всех файлов в директории и её поддиректориях.
 
@@ -19,4 +20,4 @@ def read_text_from_files(directory: str, file_extensions=None):
             except (UnicodeDecodeError, PermissionError) as e:
                 print(f"⚠️ Не удалось прочитать {file_path}: {e}")
 
-    return '/n'.join(texts)
+    return texts
