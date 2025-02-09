@@ -1,75 +1,62 @@
-## Бенчмарк
+### Benchmark
 
-Данный бенчмарк предназначен для оценки производительности. Он содержит код для обработки данных, API-сервер для прототипа, а также модули для подсчета метрик
+This benchmark is designed to evaluate performance. It includes code for data processing, an API server for the prototype, and modules for metric calculation.
 
-### 📁 Структура бенчмарка
+### 📁 Benchmark Structure
 
 ```
 benchmark/
-│── checkpoints/                # Папка для сохраненных контрольных точек. (checkpoints) модели.
-│   ├── fairy-tails_2025-02-07_17-47-04_wiYurO/  # Пример каталога с чекпоинтами для индексированных графов.
-│── data/                       # Данные для бенчмарка.
-│   ├── chegeka/                # Набор данных "chegeka".
-│   ├── fairy-tails/            # Синтетический датасет.
-│── .env                        # Секреты.
-│── __init__.py                 # Файл инициализации пакета Python.
-│── api.py                      # Модуль для взаимодействия с API.
-│── prepare.py                  # Модуль для подготовки данных или предобработки.
+│── checkpoints/                # Folder for saved model checkpoints.
+│   ├── fairy-tails_2025-02-07_17-47-04_wiYurO/  # Example directory with checkpoints for indexed graphs.
+│── data/                       # Data for the benchmark.
+│   ├── chegeka/                # "chegeka" dataset.
+│   ├── fairy-tails/            # Synthetic dataset.
+│── .env                        # Secrets.
+│── __init__.py                 # Python package initialization file.
+│── api.py                      # Module for API interaction.
+│── prepare.py                   # Module for data preparation or preprocessing.
 │── README.md                   
-│── requirements-benchmark.in   # Файл с зависимостями для бенчмарка
-│── requirements-benchmark.txt  # Скомпилированный файл с зависимостями для бенчмарка
+│── requirements-benchmark.in   # Dependency file for the benchmark.
+│── requirements-benchmark.txt  # Compiled dependency file for the benchmark.
 ```
 
 ---
 
-> При запуске команд ниже настройка окружения и зависимостей производится автоматически. Необходимо вызывать команды из корня проекта.
+> When running the commands below, environment and dependency setup is performed automatically. Commands should be executed from the project root.
 
-### 🛠 Подготовка графа
+### 🛠 Graph Preparation
 
-На данном этапе мы предлагаем сформировать граф знаний на основе указанного датасета. Ожидается, что датасет будет иметь следующий формат:
+At this stage, we propose constructing a knowledge graph based on the specified dataset. The dataset is expected to have the following format:
 
 ```json
 [
     {
-        "instruction": <строка - инструкция, что нужно сделать системе>,
+        "instruction": <string - instruction on what the system should do>,
         "inputs": {
-            "text": <строка - вопрос>,
+            "text": <string - question>,
         },
-        "outputs": <строка - эталонный ответ>,
-        "meta": { <дополнительная информация> },
-        "wiki_articles": {"Бьёрнстьерне Бьёрнсон": <текст документа> ...}
+        "outputs": <string - reference answer>,
+        "meta": { <additional information> },
+        "wiki_articles": {"Bjørnstjerne Bjørnson": <document text> ...}
 ]
-
 ```
 
-После загрузки датасета начнется индексация графа и по завершении работы в указанную директорию c чекпоинтами будут сохранены два файла: 
-- `graph.gml` - хранит граф
-- `summary.parquet` - саммари по найденным комьюнити
+After loading the dataset, the graph indexing process will begin. Upon completion, two files will be saved in the specified checkpoint directory:  
+- `graph.gml` - contains the graph  
+- `summary.parquet` - summary of the identified communities  
 
 ```bash
-make index-bench SOURCE=<путь до датасета>
+make index-bench SOURCE=<path to dataset>
 ```
 
-
-### 🚀 Запуск
+### 🚀 Running the Benchmark
 
 ```bash
 make run-bench
 ```
 
-### Подготовка корпуса данных
+### Data Corpus Preparation
 
-Наш бенчмарк использует два датасета:
-1. [CheGeKa](https://mera.a-ai.ru/ru/tasks/8). Мы выбрали случайным образом 100 вопросов. Для каждого вопроса попросили Claude-Sonnet-3.5 (с веб-поиском) найти в Интернете релевантные статьи из Википедии. У нас получился набор вопросов, а также релевантные статьи к ним для формирования графовой базы знаний.
-2. Также мы сформировали синтетический датасет путем генерации сказок по заданной теме с помощью DeepSeek-R1
-
-
-### Результаты
-
----
-
-## 📌 TODO
-
-- [ ] Дописать описание целей проекта
-- [ ] Добавить примеры использования
-- [ ] Улучшить документацию
+Our benchmark uses two datasets:
+1. [CheGeKa](https://mera.a-ai.ru/ru/tasks/8). We randomly selected 100 questions. For each question, we asked Claude-Sonnet-3.5 (with web search) to find relevant Wikipedia articles. This resulted in a set of questions along with relevant articles for building a graph-based knowledge base.
+2. Additionally, we created a synthetic dataset by generating fairy tales on a given topic using DeepSeek-R1.
