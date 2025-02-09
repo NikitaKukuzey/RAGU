@@ -1,0 +1,17 @@
+-r ./../requirements.in
+
+# Storing secrets
+python-dotenv
+pydantic
+
+# API
+openai
+
+# Metrics
+bert_score
+ragas==0.2.12
+langchain-huggingface
+
+# .parquet
+pyarrow
+fastparquet
