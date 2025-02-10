@@ -1,7 +1,8 @@
-from typing import Any, List, Optional
+from typing import Any, List
 
 from tqdm import tqdm
-import opennre
+
+from ragu.common.settings import settings
 from ragu.triplet.base_triplet import TripletExtractor
 
 
@@ -34,42 +35,23 @@ class TripletLLM(TripletExtractor):
         from ragu.utils.triplet_parser import parse_relations
 
         results = []
+        raw_output = []
         for text in tqdm(elements, desc='Index create: extract entities'):
+            print(text)
             response = client.chat.completions.create(
-                model=self.model_name,
+                model=settings.llm_model_name,
                 messages=[
                     {"role": "system", "content": tripler_system_prompts},
                     {"role": "user", "content": text}
                 ]
             )
-            response = parse_relations(response.choices[0].message.content)
+            raw_relations = response.choices[0].message.content
+
+            response = parse_relations(raw_relations)
             results.extend(response)
-        return results
+
+            raw_output.append({'relations': raw_relations, 'chunk': text})
+            
+        return results, raw_output
 
 
-@TripletExtractor.register("opennre")
-class TripletNEREL(TripletExtractor):
-    """
-    Extracts triplets using the OpenNRE model.
-    """
-    
-    def __init__(self, class_name: str, model_name: str) -> None:
-        """
-        Initializes the OpenNRE-based triplet extractor.
-
-        :param class_name: Identifier for the extractor class.
-        :param model_name: Name of the OpenNRE model.
-        """
-        super().__init__()
-        self.model_name = model_name
-        self.opennre_model = opennre.get_model(self.model_name)
-
-    def extract_entities_and_relationships(self, text: str, client: Optional[Any] = None) -> Any:
-        """
-        Uses the OpenNRE model to extract entities and relationships from text.
-
-        :param text: The input text to process.
-        :param client: Not used in this implementation.
-        :return: Extracted triplet data.
-        """
-        return self.opennre_model.infer({'text': text})[0]
