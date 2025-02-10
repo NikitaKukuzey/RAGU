@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from ragu.common import Registrable
+from ragu.common.register import Registrable
 
 
 class TripletExtractor(ABC, Registrable):
