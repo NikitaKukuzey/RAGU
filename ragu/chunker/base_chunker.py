@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from ragu.common import Registrable
+from ragu.common.register import Registrable
+from ragu.common.types import Chunk
 
 
 class Chunker(ABC, Registrable):
@@ -19,7 +20,7 @@ class Chunker(ABC, Registrable):
         self.config = config
     
     @abstractmethod
-    def get_chunks(self, documents: List[str]) -> List[str]:
+    def get_chunks(self, documents: List[str]) -> List[Chunk]:
         """
         Abstract method for splitting documents into smaller chunks.
         Must be implemented in subclasses.
@@ -29,7 +30,7 @@ class Chunker(ABC, Registrable):
         """
         pass
 
-    def __call__(self, documents: List[str]) -> List[str]:
+    def __call__(self, documents: List[str]) -> List[Chunk]:
         """
         Calls the chunker on a given list of documents.
 
