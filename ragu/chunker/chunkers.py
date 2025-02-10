@@ -6,6 +6,7 @@ from razdel import sentenize
 from sentence_transformers import SentenceTransformer
 
 from ragu.chunker.base_chunker import Chunker
+from ragu.common.types import Chunk
 
 
 @Chunker.register("simple")
@@ -25,18 +26,34 @@ class SimpleChunker(Chunker):
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
-    def get_chunks(self, documents: List[str]) -> List[str]:
+    def get_chunks(self, documents: List[str]) -> List[Chunk]:
         """
         Splits documents into fixed-size overlapping chunks.
 
         :param documents: List of input documents.
         :return: List of text chunks.
         """
-        chunks = []
+
+        chunks: list[Chunk] = []
         for document in documents:
-            for i in range(0, len(document), self.max_chunk_size - self.overlap):
-                chunk = document[i : i + self.max_chunk_size]
-                chunks.append(chunk)
+            sentences = [chunk.text for chunk in sentenize(document)]
+            current_chunk = ""
+
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) <= self.max_chunk_size:
+                    current_chunk += sentence + " "
+                else:
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+
+                    if chunks and self.overlap > 0:
+                        current_chunk = chunks[-1][-self.overlap:] + " " + sentence + " "
+                    else:
+                        current_chunk = sentence + " "
+
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+
         return chunks
 
 
@@ -85,7 +102,7 @@ class SemanticTextChunker(Chunker):
         embeddings = self.model.encode(document, convert_to_tensor=True)
         return embeddings.cpu().numpy()
 
-    def compute_similarities(self, chunks: List[str]) -> np.ndarray:
+    def compute_similarities(self, chunks: List[Chunk]) -> np.ndarray:
         """
         Computes pairwise cosine similarities between consecutive chunks.
 
@@ -104,7 +121,7 @@ class SemanticTextChunker(Chunker):
         ])
         return similarities
 
-    def join_chunks_by_semantics(self, chunks: List[str], similarities: np.ndarray) -> List[str]:
+    def join_chunks_by_semantics(self, sentences: List[str], similarities: np.ndarray) -> List[Chunk]:
         """
         Merges chunks based on semantic similarity, ensuring chunk sizes do not exceed the limit.
 
@@ -112,26 +129,26 @@ class SemanticTextChunker(Chunker):
         :param similarities: Pairwise similarity scores between chunks.
         :return: List of semantically merged text chunks.
         """
-        if len(chunks) < 2:
-            return chunks
+        if len(sentences) < 2:
+            return sentences
 
-        n_tokens = len(self.model.tokenize(" ".join(chunks))["input_ids"])
+        n_tokens = len(self.model.tokenize(" ".join(sentences))["input_ids"])
         if n_tokens <= self.max_chunk_size:
-            return [" ".join(chunks)]
+            return [" ".join(sentences)]
 
         min_similarity_idx = np.argmin(similarities)
         return (
             self.join_chunks_by_semantics(
-                chunks[: min_similarity_idx + 1], 
+                sentences[: min_similarity_idx + 1], 
                 similarities[:min_similarity_idx]
             )
             + self.join_chunks_by_semantics(
-                chunks[min_similarity_idx + 1 :], 
+                sentences[min_similarity_idx + 1 :], 
                 similarities[min_similarity_idx + 1 :]
             )
         )
 
-    def get_chunks(self, documents: List[str]) -> List[str]:
+    def get_chunks(self, documents: List[str]) -> List[Chunk]:
         """
         Splits text into semantically coherent chunks.
 
@@ -140,7 +157,8 @@ class SemanticTextChunker(Chunker):
         """
         all_chunks = []
         for document in documents:
-            chunks = self.split_text_by_chunks(document)
-            similarities = self.compute_similarities(chunks)
-            all_chunks.extend(self.join_chunks_by_semantics(chunks, similarities))
+            sentences = self.split_text_by_chunks(document)
+            similarities = self.compute_similarities(sentences)
+            chunks = self.join_chunks_by_semantics(sentences, similarities)
+            all_chunks.extend(chunks)
         return all_chunks
