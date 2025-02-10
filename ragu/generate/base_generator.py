@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ragu.common import Registrable
+from ragu.common.register import Registrable
 
 
 class Generator(ABC, Registrable):
