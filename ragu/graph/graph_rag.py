@@ -46,7 +46,7 @@ class GraphRag:
             config=self.config.graph
         )
         chunks = self.chunker(documents)
-        triplets = self.triplet(chunks, client=client)
+        triplets, _ = self.triplet(chunks, client=client)
         self.graph, self.community_summary = self.graph_builder(triplets)
         return self
 
