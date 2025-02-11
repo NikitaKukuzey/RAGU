@@ -145,6 +145,48 @@ class GraphRag:
 
     def visualize(self) -> None:
         """
-        Placeholder for a graph visualization method.
+        Visualizes the knowledge graph with node degree coloring.
         """
-        pass
+        from matplotlib.colors import LinearSegmentedColormap
+        import matplotlib.pyplot as plt
+
+        degrees = dict(self.graph.degree())
+
+        min_degree = min(degrees.values())
+        max_degree = max(degrees.values())
+        if max_degree == min_degree:
+            normalized_degrees = [0.5 for _ in degrees.values()]
+        else:
+            normalized_degrees = [
+                (degree - min_degree) / (max_degree - min_degree)
+                for degree in degrees.values()
+            ]
+
+        colors = ["#d8d8b3", "#006400"]
+        custom_cmap = LinearSegmentedColormap.from_list("BeigeGreen", colors)
+        colormap = custom_cmap
+        node_colors = [colormap(norm_degree) for norm_degree in normalized_degrees]
+
+        fig, ax = plt.subplots()
+
+        pos = nx.kamada_kawai_layout(self.graph)
+
+        nx.draw(
+            self.graph,
+            pos,
+            ax=ax,
+            with_labels=True,
+            node_color=node_colors,
+            edge_color='gray',
+            node_size=2000,
+            font_size=10,
+            font_weight='bold'
+        )
+
+        norm = plt.Normalize(vmin=min_degree, vmax=max_degree)
+        sm = plt.cm.ScalarMappable(cmap=colormap, norm=norm)
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label="Node Degree")
+
+        plt.title("GML Graph Visualization with Node Degree Coloring")
+        plt.show()
