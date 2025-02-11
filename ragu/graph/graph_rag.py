@@ -10,6 +10,14 @@ from ragu import (
 
 from ragu.graph.build import GraphBuilder
 
+from ragu.graph.graph_items import (
+    EntityExtractor,
+    RelationExtractor,
+    get_nodes,
+    get_relationships
+)
+
+
 
 class GraphRag:
     """
@@ -41,13 +49,22 @@ class GraphRag:
         :param client: API client for processing and summarization.
         :return: Instance of GraphRag with a built graph and community summaries.
         """
-        self.graph_builder = GraphBuilder(
+        graph_builder = GraphBuilder(
             client=client, 
             config=self.config.graph
         )
         chunks = self.chunker(documents)
+
         triplets = self.triplet(chunks, client=client)
-        self.graph, self.community_summary = self.graph_builder(triplets)
+
+        entities = EntityExtractor.extract(triplets, chunks, client=client)
+        relationships = RelationExtractor.extract(triplets, client)
+
+        nodes = get_nodes(entities)
+        edges = get_relationships(relationships, nodes)
+
+        self.graph = graph_builder.build(edges)
+
         return self
 
     def __call__(self, query: str, client: Any) -> Any:
