@@ -56,11 +56,16 @@ class OriginalGenerator(Generator):
                 continue 
 
             digits_only = re.sub(r'\D', '', answer_parts[0])
-            rating = int(digits_only)
+
+            # TODO: try something better...
+            if digits_only == "":
+                rating = 3
+            else:
+                rating = int(digits_only)
             response = answer_parts[1]
 
-            # Skip answers with a rating less than 6
-            if rating < 6:
+            # Skip answers with a rating less than 3
+            if rating < 3:
                 continue  
 
             intermediate_answers.append((rating, response))
