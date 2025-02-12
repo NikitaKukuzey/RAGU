@@ -18,7 +18,6 @@ from ragu.graph.graph_items import (
 )
 
 
-
 class GraphRag:
     """
     A pipeline for building and querying a knowledge graph using extracted triplets
@@ -38,7 +37,7 @@ class GraphRag:
         self.reranker = Reranker.get(**config.reranker)
         self.generator = Generator.get(**config.generator)
         
-        self.graph = nx.Graph()
+        self.graph = None
         self.community_summary: Optional[str] = None
 
     def build(self, documents: List[str], client: Any) -> "GraphRag":
@@ -54,16 +53,16 @@ class GraphRag:
             config=self.config.graph
         )
         chunks = self.chunker(documents)
-
         triplets = self.triplet(chunks, client=client)
 
         entities = EntityExtractor.extract(triplets, chunks, client=client)
-        relationships = RelationExtractor.extract(triplets, client)
+        relationships = RelationExtractor.extract(triplets, client=client)
 
         nodes = get_nodes(entities)
         edges = get_relationships(relationships, nodes)
 
-        self.graph = graph_builder.build(edges)
+        self.graph, self.community_summary = graph_builder(edges)
+        self.save_graph('temp/graph.gml')
 
         return self
 

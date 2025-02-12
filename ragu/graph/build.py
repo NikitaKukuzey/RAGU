@@ -1,123 +1,139 @@
 import networkx as nx
 from tqdm import tqdm
-from cdlib import algorithms
-from ragu.common.types import Relation
-from typing import List, Tuple, Callable, Any
+from dataclasses import dataclass
+from typing import List, Tuple, Any, Hashable
 
+from ragu.common.types import Relation, Community
 from ragu.common.settings import settings
+from ragu.utils.default_prompts.community_summary_prompt import prompt
 
-# TODO: Add new component content composing and insert it in GraphBuilder
-def detect_communities(graph: nx.Graph) -> List[str]:
+
+def detect_communities(graph: nx.Graph) -> List[Community]:
     """
-    Detects communities in the graph and represents them as strings.
+    Detect communities in the given graph by extracting its weakly connected components.
 
-    Each community is a set of connected nodes, and the function extracts
-    edge information to create a textual representation of each community.
+    Each component is converted into a Community instance containing its nodes and edges.
 
-    :param graph: NetworkX graph.
-    :return: List of community representations as strings.
+    :param graph: A NetworkX graph.
+    :return: A list of Community instances.
     """
-    # communities_content = []
-    # for component in nx.connected_components(graph):
-    #     subgraph = graph.subgraph(component)
-    #     # Entities:
-    #     #entities = [f'Сущность: {u}, описание: {descr}' for u, descr in subgraph.nodes(data=True)]
-    #     # print(subgraph)
-    #     component_content = [f"{u} {attrs['label']} {v}" for u, v, attrs in subgraph.edges(data=True)]
-    #     communities_content.append(". ".join(component_content))
-    # return communities_content
-    pass
+    communities: List[Community] = []
+
+    for component_nodes in nx.weakly_connected_components(graph):
+        component_subgraph = graph.subgraph(component_nodes)
+        entities = [
+            (node, data.get("description", ""))
+            for node, data in component_subgraph.nodes(data=True)
+        ]
+        relations = [
+            (u, v, data.get("label", ""))
+            for u, v, data in component_subgraph.edges(data=True)
+        ]
+        communities.append(Community(entities=entities, relations=relations))
+
+    return communities
 
 
-# TODO: Insert it in GraphBuilder
-def get_community_summary(texts: List[str], client: Any, config: Any) -> List[str]:
+def get_community_summaries(communities: List[Community], client: Any) -> List[str]:
     """
-    Generates summaries for detected communities using a language model.
+    Generate summaries for each community using a language model.
 
-    :param texts: List of community descriptions.
+    The function builds a textual representation for each community (with its entities and relations)
+    and passes it to the language model API client.
+
+    :param communities: List of Community instances.
     :param client: API client for interacting with the language model.
-    :param config: Configuration object containing model parameters.
     :return: List of summaries for each community.
     """
-    from ragu.utils.default_prompts.community_summary_prompt import prompt
+
+    def compose_community_string(
+            entities: List[Tuple[Hashable, str]],
+            relations: List[Tuple[Hashable, Hashable, str]]
+    ) -> str:
+        vertices_str = ",\n".join(
+            f"Сущность: {entity}, описание: {description}" for entity, description in entities
+        )
+        relations_str = "\n".join(
+            f"{source} -> {label} -> {target}" for source, target, label in relations
+        )
+        return f"{vertices_str}\n\nОтношения:\n{relations_str}"
 
     summaries = []
-    for text in tqdm(texts, desc='Index create: community summary'):
+    for community in tqdm(communities, desc='Index create: community summary'):
+        community_text = compose_community_string(community.entities, community.relations)
         response = client.chat.completions.create(
             model=settings.llm_model_name,
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": text},
+                {"role": "user", "content": community_text},
             ],
         )
-        summaries.append(response.choices[0].message.content.strip())
+        summary = response.choices[0].message.content.strip()
+        summaries.append(summary)
+
     return summaries
 
 
 class GraphBuilder:
     """
-    Graph processing pipeline that builds a graph, detects communities,
+    Graph processing pipeline that builds a graph, extracts communities,
     and generates summaries for each community.
     """
 
-    def __init__(
-            self,
-            client: Any,
-            config: Any,
-    ) -> None:
+    def __init__(self, client: Any, config: Any) -> None:
         """
-        Initializes the GraphBuilder with the necessary components.
+        Initialize the GraphBuilder with the required API client and configuration.
 
         :param client: API client for community summarization.
         :param config: Configuration object containing model parameters.
-        :param graph_builder_func: Function to construct a graph from triplets.
-        :param get_community_summary_func: Function to summarize detected communities.
-        :param detect_communities_func: Function to detect communities in a graph.
         """
         self.client = client
         self.config = config
-        self.graph_builder_func = graph_builder_func
-        self.get_community_summary_func = get_community_summary_func
-        self.detect_communities_func = detect_communities_func
 
-    def __call__(
-            self,
-            relations,
-            *args,
-            **kwargs
-    ) -> Tuple[nx.Graph, List[str]]:
+    def __call__(self, relations: List[Relation]) -> Tuple[nx.DiGraph, List[str]]:
         """
-        Executes the graph processing pipeline.
+        Execute the graph processing pipeline.
 
-        :param triplets: List of (entity1, relation, entity2) tuples.
-        :return: Tuple containing the built graph and a list of community summaries.
+        The method builds a directed graph from the provided relations, detects communities,
+        and generates summaries for each community.
+
+        :param relations: List of Relation objects.
+        :return: A tuple containing the built directed graph and a list of community summaries.
         """
-        graph = self.build(relations)
-        # communities = self.detect_communities_func(graph)
-        # communities_summaries = self.get_community_summary_func(
-        #     communities,
-        #     self.client,
-        #     self.config
-        # )
-        return graph, communities_summaries
+        graph = self.build_graph(relations)
+        communities = detect_communities(graph)
+        community_summaries = get_community_summaries(communities, self.client)
+        return graph, community_summaries
 
-    def build(self, relations: list[Relation]):
-        graph = nx.Graph()
+    def build_graph(self, relations: List[Relation]) -> nx.DiGraph:
+        """
+        Build a directed graph from the provided relations.
 
+        Each relation defines source and target nodes along with edge labels.
+
+        :param relations: List of Relation objects.
+        :return: A directed NetworkX graph.
+        """
+        graph = nx.DiGraph()
         for relation in relations:
+            source_entity = relation.source.entity
+            target_entity = relation.target.entity
+
             graph.add_node(
-                relation.source.entity,
-                entity_name=relation.source.entity,
+                source_entity,
+                entity_name=source_entity,
                 description=relation.source.description
             )
+
             graph.add_node(
-                relation.target.entity,
-                entity_name=relation.target.entity,
+                target_entity,
+                entity_name=target_entity,
                 description=relation.target.description
             )
+
             graph.add_edge(
-                relation.source.entity,
-                relation.target.entity,
+                source_entity,
+                target_entity,
                 label=relation.description
             )
 
