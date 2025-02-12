@@ -10,6 +10,13 @@ from ragu import (
 
 from ragu.graph.build import GraphBuilder
 
+from ragu.graph.graph_items import (
+    EntityExtractor,
+    RelationExtractor,
+    get_nodes,
+    get_relationships
+)
+
 
 class GraphRag:
     """
@@ -30,7 +37,7 @@ class GraphRag:
         self.reranker = Reranker.get(**config.reranker)
         self.generator = Generator.get(**config.generator)
         
-        self.graph = nx.Graph()
+        self.graph = None
         self.community_summary: Optional[str] = None
 
     def build(self, documents: List[str], client: Any) -> "GraphRag":
@@ -41,13 +48,22 @@ class GraphRag:
         :param client: API client for processing and summarization.
         :return: Instance of GraphRag with a built graph and community summaries.
         """
-        self.graph_builder = GraphBuilder(
+        graph_builder = GraphBuilder(
             client=client, 
             config=self.config.graph
         )
         chunks = self.chunker(documents)
-        triplets, _ = self.triplet(chunks, client=client)
-        self.graph, self.community_summary = self.graph_builder(triplets)
+        triplets = self.triplet(chunks, client=client)
+
+        entities = EntityExtractor.extract(triplets, chunks, client=client)
+        relationships = RelationExtractor.extract(triplets, client=client)
+
+        nodes = get_nodes(entities)
+        edges = get_relationships(relationships, nodes)
+
+        self.graph, self.community_summary = graph_builder(edges)
+        self.save_graph('temp/graph.gml')
+
         return self
 
     def __call__(self, query: str, client: Any) -> Any:
@@ -128,6 +144,48 @@ class GraphRag:
 
     def visualize(self) -> None:
         """
-        Placeholder for a graph visualization method.
+        Visualizes the knowledge graph with node degree coloring.
         """
-        pass
+        from matplotlib.colors import LinearSegmentedColormap
+        import matplotlib.pyplot as plt
+
+        degrees = dict(self.graph.degree())
+
+        min_degree = min(degrees.values())
+        max_degree = max(degrees.values())
+        if max_degree == min_degree:
+            normalized_degrees = [0.5 for _ in degrees.values()]
+        else:
+            normalized_degrees = [
+                (degree - min_degree) / (max_degree - min_degree)
+                for degree in degrees.values()
+            ]
+
+        colors = ["#d8d8b3", "#006400"]
+        custom_cmap = LinearSegmentedColormap.from_list("BeigeGreen", colors)
+        colormap = custom_cmap
+        node_colors = [colormap(norm_degree) for norm_degree in normalized_degrees]
+
+        fig, ax = plt.subplots()
+
+        pos = nx.kamada_kawai_layout(self.graph)
+
+        nx.draw(
+            self.graph,
+            pos,
+            ax=ax,
+            with_labels=True,
+            node_color=node_colors,
+            edge_color='gray',
+            node_size=2000,
+            font_size=10,
+            font_weight='bold'
+        )
+
+        norm = plt.Normalize(vmin=min_degree, vmax=max_degree)
+        sm = plt.cm.ScalarMappable(cmap=colormap, norm=norm)
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label="Node Degree")
+
+        plt.title("GML Graph Visualization with Node Degree Coloring")
+        plt.show()

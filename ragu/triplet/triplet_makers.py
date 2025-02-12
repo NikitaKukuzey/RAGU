@@ -1,5 +1,5 @@
-from typing import Any, List
-
+import pandas as pd
+from typing import List, Any
 from tqdm import tqdm
 
 from ragu.common.settings import settings
@@ -23,21 +23,20 @@ class TripletLLM(TripletExtractor):
         super().__init__()
         self.model_name = model_name
 
-    def extract_entities_and_relationships(self, elements: List[str], client: Any) -> List[Any]:
+    def extract_entities_and_relationships(self, elements: List[str], client: Any) -> pd.DataFrame:
         """
-        Uses an LLM to extract entities and relationships from the input text.
+        Uses an LLM to extract entities and relationships from the input text and returns a DataFrame.
 
-        :param text: The input text to process.
+        :param elements: The input text to process.
         :param client: External API client for LLM interaction.
-        :return: A list of extracted triplets.
+        :return: A pandas DataFrame with extracted relations.
         """
         from ragu.utils.default_prompts.triplet_maker_prompts import tripler_system_prompts
         from ragu.utils.triplet_parser import parse_relations
 
         results = []
-        raw_output = []
-        for text in tqdm(elements, desc='Index create: extract entities'):
-            print(text)
+
+        for i, text in tqdm(enumerate(elements), desc='Index create: extract entities'):
             response = client.chat.completions.create(
                 model=settings.llm_model_name,
                 messages=[
@@ -46,12 +45,20 @@ class TripletLLM(TripletExtractor):
                 ]
             )
             raw_relations = response.choices[0].message.content
+            extracted_relations = parse_relations(raw_relations)
 
-            response = parse_relations(raw_relations)
-            results.extend(response)
+            for relation in extracted_relations:
+                results.append((*relation, i))
 
-            raw_output.append({'relations': raw_relations, 'chunk': text})
-            
-        return results, raw_output
+        df = pd.DataFrame(results, columns=[
+            "Source entity",
+            "Source entity type",
+            "Relation",
+            "Relation type",
+            "Target entity",
+            "Target entity type",
+            "Chunk index"
+        ])
 
+        return df
 
