@@ -93,14 +93,6 @@ class EntityExtractor:
             unique_entities = pd.concat([group['Source entity'], group['Target entity']]).unique().tolist()
             text = f"Entity list: {unique_entities}\nText: {chunks[int(chunk_id)]}"
 
-            # response = client.chat.completions.create(
-            #     model=settings.llm_model_name,
-            #     messages=[
-            #         {"role": "system", "content": entites_info_prompt},
-            #         {"role": "user", "content": text}
-            #     ]
-            # )
-
             response = client.generate(text, entites_info_prompt)
 
             parsed_response = parse_description(response)
