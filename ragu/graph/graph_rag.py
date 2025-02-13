@@ -9,6 +9,7 @@ from ragu import (
 )
 
 from ragu.graph.build import GraphBuilder
+from ragu.common.llm import BaseLLM
 
 from ragu.graph.graph_items import (
     EntityExtractor,
@@ -40,7 +41,7 @@ class GraphRag:
         self.graph = None
         self.community_summary: Optional[str] = None
 
-    def build(self, documents: List[str], client: Any) -> "GraphRag":
+    def build(self, documents: List[str], client: BaseLLM) -> "GraphRag":
         """
         Builds the knowledge graph from a list of documents.
 
@@ -66,7 +67,7 @@ class GraphRag:
 
         return self
 
-    def __call__(self, query: str, client: Any) -> Any:
+    def __call__(self, query: str, client: BaseLLM) -> Any:
         """
         Handles queries by retrieving relevant information from the knowledge graph.
 

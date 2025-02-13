@@ -1,10 +1,10 @@
 import networkx as nx
 from tqdm import tqdm
-from dataclasses import dataclass
 from typing import List, Tuple, Any, Hashable
 
 from ragu.common.types import Relation, Community
 from ragu.common.settings import settings
+from ragu.common.llm import BaseLLM
 from ragu.utils.default_prompts.community_summary_prompt import prompt
 
 
@@ -34,7 +34,7 @@ def detect_communities(graph: nx.Graph) -> List[Community]:
     return communities
 
 
-def get_community_summaries(communities: List[Community], client: Any) -> List[str]:
+def get_community_summaries(communities: List[Community], client: BaseLLM) -> List[str]:
     """
     Generate summaries for each community using a language model.
 
@@ -61,14 +61,8 @@ def get_community_summaries(communities: List[Community], client: Any) -> List[s
     summaries = []
     for community in tqdm(communities, desc='Index create: community summary'):
         community_text = compose_community_string(community.entities, community.relations)
-        response = client.chat.completions.create(
-            model=settings.llm_model_name,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": community_text},
-            ],
-        )
-        summary = response.choices[0].message.content.strip()
+
+        summary = client.generate(community_text, prompt).strip()
         summaries.append(summary)
 
     return summaries

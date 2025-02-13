@@ -3,6 +3,7 @@ from typing import List, Any
 from tqdm import tqdm
 
 from ragu.common.settings import settings
+from ragu.common.llm import BaseLLM
 from ragu.triplet.base_triplet import TripletExtractor
 
 
@@ -23,7 +24,7 @@ class TripletLLM(TripletExtractor):
         super().__init__()
         self.model_name = model_name
 
-    def extract_entities_and_relationships(self, elements: List[str], client: Any) -> pd.DataFrame:
+    def extract_entities_and_relationships(self, elements: List[str], client: BaseLLM) -> pd.DataFrame:
         """
         Uses an LLM to extract entities and relationships from the input text and returns a DataFrame.
 
@@ -37,14 +38,7 @@ class TripletLLM(TripletExtractor):
         results = []
 
         for i, text in tqdm(enumerate(elements), desc='Index create: extract entities'):
-            response = client.chat.completions.create(
-                model=settings.llm_model_name,
-                messages=[
-                    {"role": "system", "content": tripler_system_prompts},
-                    {"role": "user", "content": text}
-                ]
-            )
-            raw_relations = response.choices[0].message.content
+            raw_relations = client.generate(text, tripler_system_prompts)
             extracted_relations = parse_relations(raw_relations)
 
             for relation in extracted_relations:
