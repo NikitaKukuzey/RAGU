@@ -13,16 +13,12 @@ class TripletLLM(TripletExtractor):
     Extracts triplets using a large language model (LLM).
     """
     
-    def __init__(self, class_name: str, model_name: str, system_prompt: str) -> None:
+    def __init__(self, class_name: str, validate: bool) -> None:
         """
         Initializes the LLM-based triplet extractor.
-
-        :param class_name: Identifier for the extractor class.
-        :param model_name: Name of the LLM model.
-        :param system_prompt: System prompt used for LLM-based extraction.
         """
         super().__init__()
-        self.model_name = model_name
+        self.validate = validate
 
     def extract_entities_and_relationships(self, elements: List[str], client: BaseLLM) -> pd.DataFrame:
         """
