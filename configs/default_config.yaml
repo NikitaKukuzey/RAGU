@@ -1,0 +1,22 @@
+chunker:
+  class_name: 'semantic'
+  model_name: 'BAAI/bge-reranker-v2-m3'
+  max_chunk_size: 1000
+
+triplet:
+  class_name: 'original'
+  validate: False
+
+generator:
+  class_name: 'original_generator'
+
+reranker:
+  class_name: 'cross_encoder_reranker'
+  model_name: 'BAAI/bge-reranker-v2-m3'
+  top_k: 5
+
+graph:
+  class_name: 'original'
+
+
+
