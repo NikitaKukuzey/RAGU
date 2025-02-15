@@ -38,31 +38,40 @@ To install RAGu, follow these steps:
 Below is an example of how to use RAGu to build a knowledge graph and query it:
 
 ```python
-import hydra
-from openai import OpenAI
-
-from ragu.common import settings
 from ragu.utils.io_utils import read_text_from_files
+from ragu.utils.parameters import get_parameters
+from ragu.common.llm import RemoteLLM
 from ragu.graph.graph_rag import GraphRag
 
-client = OpenAI(
-    base_url=settings.llm_base_url,
-    api_key=settings.llm_api_key,
-)
 
-@hydra.main(version_base=None, config_path="configs", config_name="default")
-def main(config):
-    text = read_text_from_files('data/ru')
+LLM_MODEL_NAME = "..."
+LLM_BASE_URL = "..."
+LLM_API_KEY = "..."
+client = RemoteLLM(LLM_MODEL_NAME, LLM_BASE_URL, LLM_API_KEY)
 
-    graph_rag = GraphRag(config).build(text, client)
+
+def main():
+    text = read_text_from_files('path/to/folder')
+
+    chunker_params, triplet_params, reranker_params, generator_params = (
+        get_parameters('configs/default_config.yaml')
+    )
+
+    graph_rag = GraphRag(
+        chunker_params,
+        triplet_params,
+        reranker_params,
+        generator_params
+    ).build(text, client)
 
     questions = [
-        "Как звали главных героев сказки о трех студентах и бездне RAG", 
-        "Что выводилось на экране, когда студенты пытались запустить RAG систему?"
+        "Как звали последнего Императора России?",
+        "Как звали детей последнего Императора Российской Империи?"
     ]
 
     for question in questions:
         print(f'Question: {question}, answer: {graph_rag.get_response(question, client)}')
+
 
 if __name__ == "__main__":
     main()
@@ -95,6 +104,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Contact
 
-For any questions or inquiries, please contact me at [asphodel.rem@gmail.com].
+For any questions or inquiries, please contact me at asphodel.rem@gmail.com.
 
 ---
