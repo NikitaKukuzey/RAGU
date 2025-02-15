@@ -74,15 +74,13 @@ class GraphBuilder:
     and generates summaries for each community.
     """
 
-    def __init__(self, client: Any, config: Any) -> None:
+    def __init__(self, client: Any) -> None:
         """
         Initialize the GraphBuilder with the required API client and configuration.
 
         :param client: API client for community summarization.
-        :param config: Configuration object containing model parameters.
         """
         self.client = client
-        self.config = config
 
     def __call__(self, relations: List[Relation]) -> Tuple[nx.DiGraph, List[str]]:
         """

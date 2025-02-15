@@ -8,6 +8,13 @@ from ragu import (
     Generator
 )
 
+from ragu.common.parameters import (
+    ChunkerParameters,
+    TripletExtractorParameters,
+    RerankerParameters,
+    GeneratorParameters,
+)
+
 from ragu.graph.build import GraphBuilder
 from ragu.common.llm import BaseLLM
 
@@ -25,18 +32,23 @@ class GraphRag:
     and community-based summarization.
     """
     
-    def __init__(self, config: Any) -> None:
+    def __init__(
+            self,
+            chunker_parameters: ChunkerParameters,
+            triplet_extractor_parameters: TripletExtractorParameters,
+            reranker_parameters: RerankerParameters,
+            generator_parameters: GeneratorParameters,
+    ) -> None:
         """
         Initializes the GraphRag pipeline components based on the provided configuration.
 
         :param config: Configuration object containing parameters for chunking,
                        triplet extraction, reranking, and generation.
         """
-        self.config = config
-        self.chunker = Chunker.get(**config.chunker)
-        self.triplet = TripletExtractor.get(**config.triplet)
-        self.reranker = Reranker.get(**config.reranker)
-        self.generator = Generator.get(**config.generator)
+        self.chunker = Chunker.get(**chunker_parameters)
+        self.triplet = TripletExtractor.get(**triplet_extractor_parameters)
+        self.reranker = Reranker.get(**reranker_parameters)
+        self.generator = Generator.get(**generator_parameters)
         
         self.graph = None
         self.community_summary: Optional[str] = None
@@ -50,8 +62,7 @@ class GraphRag:
         :return: Instance of GraphRag with a built graph and community summaries.
         """
         graph_builder = GraphBuilder(
-            client=client, 
-            config=self.config.graph
+            client=client,
         )
         chunks = self.chunker(documents)
         triplets = self.triplet(chunks, client=client)
