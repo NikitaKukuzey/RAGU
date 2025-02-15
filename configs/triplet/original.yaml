@@ -1,4 +1,0 @@
-class_name: original
-model_name: 'openai/gpt-4o-mini'
-system_prompt: 'Извлеки сущности и взаимосвязи из следующего текста.'
-#debug: true

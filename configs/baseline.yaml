@@ -1,6 +1,0 @@
-defaults:
-  - chunker: semantic_chunker
-  - triplet: original
-  - graph: original
-  - generator: original
-  - reranker: cross_encoder_reranker
