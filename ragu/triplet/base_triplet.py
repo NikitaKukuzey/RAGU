@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
 from ragu.common.register import Registrable
+from ragu.common.llm import BaseLLM
 
 
 class TripletExtractor(ABC, Registrable):
@@ -19,7 +20,7 @@ class TripletExtractor(ABC, Registrable):
         self.config = config
 
     @abstractmethod
-    def extract_entities_and_relationships(self, text: List[str], client: Any) -> List[Any]:
+    def extract_entities_and_relationships(self, text: List[str], client: BaseLLM) -> List[Any]:
         """
         Abstract method for extracting entities and relationships from a given text.
         Must be implemented in subclasses.
@@ -30,7 +31,7 @@ class TripletExtractor(ABC, Registrable):
         """
         pass
 
-    def __call__(self, elements: List[str], client: Any) -> List[Any]:
+    def __call__(self, elements: List[str], client: BaseLLM) -> List[Any]:
         """
         Processes a list of textual elements and extracts entities and relationships from each.
 

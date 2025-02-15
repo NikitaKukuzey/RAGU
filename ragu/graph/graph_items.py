@@ -3,6 +3,7 @@ from tqdm import tqdm
 from typing import Any, List, Dict, Union
 
 from ragu.common.settings import settings
+from ragu.common.llm import BaseLLM
 from ragu.common.types import Node, Relation
 from ragu.utils.triplet_parser import parse_description
 
@@ -61,7 +62,7 @@ class EntityExtractor:
     """
 
     @staticmethod
-    def extract(raw_data: pd.DataFrame, chunks: List[str], client: Any) -> pd.DataFrame:
+    def extract(raw_data: pd.DataFrame, chunks: List[str], client: BaseLLM) -> pd.DataFrame:
         """
         Extracts and summarizes entity descriptions from raw data.
 
@@ -75,7 +76,7 @@ class EntityExtractor:
         return EntityExtractor.summarize(entities_description, client)
 
     @staticmethod
-    def get_description(data: pd.DataFrame, chunks: List[str], client: Any) -> pd.DataFrame:
+    def get_description(data: pd.DataFrame, chunks: List[str], client: BaseLLM) -> pd.DataFrame:
         """
         Extracts and merges entity descriptions from data using an LLM client.
 
@@ -92,15 +93,9 @@ class EntityExtractor:
             unique_entities = pd.concat([group['Source entity'], group['Target entity']]).unique().tolist()
             text = f"Entity list: {unique_entities}\nText: {chunks[int(chunk_id)]}"
 
-            response = client.chat.completions.create(
-                model=settings.llm_model_name,
-                messages=[
-                    {"role": "system", "content": entites_info_prompt},
-                    {"role": "user", "content": text}
-                ]
-            )
+            response = client.generate(text, entites_info_prompt)
 
-            parsed_response = parse_description(response.choices[0].message.content)
+            parsed_response = parse_description(response)
             if parsed_response:
                 report_data.extend(parsed_response)
 
@@ -118,7 +113,7 @@ class EntityExtractor:
         return entities_df.groupby("Entity", as_index=False)["Description"].agg("".join)
 
     @staticmethod
-    def summarize(data: pd.DataFrame, client: Any) -> pd.DataFrame:
+    def summarize(data: pd.DataFrame, client: BaseLLM) -> pd.DataFrame:
         """
         Summarizes entity descriptions using an LLM client.
 
@@ -134,14 +129,8 @@ class EntityExtractor:
             description = row['Description']
             text = f"Entity: {entity}\nDescription: {description}"
 
-            response = client.chat.completions.create(
-                model=settings.llm_model_name,
-                messages=[
-                    {"role": "system", "content": entities_description_summary_prompt},
-                    {"role": "user", "content": text}
-                ]
-            )
-            summaries.append({'Entity': entity, 'Description': response.choices[0].message.content.strip()})
+            response = client.generate(text, entities_description_summary_prompt)
+            summaries.append({'Entity': entity, 'Description': response.strip()})
 
         summarization_table = pd.DataFrame(summaries)
         summarization_table.to_csv('temp/summarization_table.csv', index=False)

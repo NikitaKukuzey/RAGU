@@ -1,3 +1,0 @@
-class_name: 'original_generator'
-model_name: 'openai/gpt-4o-mini'
-system_prompt: 'Combine these answers into a final, concise response.'

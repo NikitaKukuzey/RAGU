@@ -2,6 +2,7 @@ import re
 from tqdm import tqdm
 
 from ragu import Generator
+from ragu.common.llm import BaseLLM
 
 
 @Generator.register("original_generator")
@@ -12,19 +13,15 @@ class OriginalGenerator(Generator):
     summaries, filters them, sorts them, and finally generates a response based on these answers.
     """
     
-    def __init__(self, class_name, model_name: str, system_prompt: str):
+    def __init__(self, class_name):
         """
         Initializes the generator with model information and system prompts.
         
         :param class_name: The class name (not used in this context but can be extended).
-        :param model_name: The name of the model to be used for generating answers.
-        :param system_prompt: The system-level prompt to guide the model's behavior.
         """
         super().__init__()
-        self.model_name = model_name
-        self.system_prompt = system_prompt
     
-    def generate_final_answer(self, query, community_summaries, client):
+    def generate_final_answer(self, query, community_summaries, client: BaseLLM, *args, **kwargs):
         """
         Generates a final answer by obtaining intermediate answers from the model, 
         filtering and sorting them based on a rating, 
@@ -40,15 +37,8 @@ class OriginalGenerator(Generator):
 
         intermediate_answers = []
         for _, summary in tqdm(enumerate(community_summaries), desc="Inference: Getting global answers."):
-            response = client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": generation_rating_prompt},
-                    {"role": "user", "content": f"Query: {query} Summary: {summary}"}
-                ]
-            )
-        
-            answer = response.choices[0].message.content
+            text = f"Query: {query} Summary: {summary}"
+            answer = client.generate(text, generation_rating_prompt)
             answer_parts = str(answer).split('<|>')
             
             # Skip if the answer doesn't match expected format
@@ -71,14 +61,7 @@ class OriginalGenerator(Generator):
             intermediate_answers.append((rating, response))
 
         intermediate_answers = sorted(intermediate_answers, key=lambda x: x[0], reverse=True)
-    
-        final_response = client.chat.completions.create(
-            model=self.model_name,
-            messages=[
-                {"role": "system", "content": generation_final_answer_prompt},
-                {"role": "user", "content": f"Intermediate answers: {intermediate_answers}"}
-            ]
-        )
-        
-        final_answer = final_response.choices[0].message.content
+
+        text = f"Intermediate answers: {intermediate_answers}"
+        final_answer = client.generate(text, generation_final_answer_prompt)
         return final_answer
