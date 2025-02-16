@@ -1,0 +1,1 @@
+from ragu.triplet.base_triplet import TripletExtractor
