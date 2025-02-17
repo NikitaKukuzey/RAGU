@@ -104,13 +104,10 @@ class EntityExtractor:
 
     @staticmethod
     def merge_entities(entities_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Merges entity descriptions by concatenating descriptions for each entity.
+        # Group by 'Entity', aggregate the 'Description' by concatenating them,
+        # and then reset the index to ensure a DataFrame is returned.
+        return entities_df.groupby("Entity")["Description"].agg("".join).reset_index()
 
-        :param entities_df: DataFrame with columns ['Entity', 'Description'].
-        :return: DataFrame with merged entity descriptions.
-        """
-        return entities_df.groupby("Entity", as_index=False)["Description"].agg("".join)
 
     @staticmethod
     def summarize(data: pd.DataFrame, client: BaseLLM) -> pd.DataFrame:
@@ -133,7 +130,7 @@ class EntityExtractor:
             summaries.append({'Entity': entity, 'Description': response.strip()})
 
         summarization_table = pd.DataFrame(summaries)
-        summarization_table.to_csv('temp/summarization_table.csv', index=False)
+        summarization_table.to_csv('./temp/summarization_table.csv', index=False)
         return summarization_table
 
 

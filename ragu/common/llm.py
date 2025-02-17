@@ -12,7 +12,7 @@ class BaseLLM:
 
 class LocalLLM(BaseLLM):
     def __init__(self, model_name: str, *args, **kwargs):
-        self.pipe = pipeline("text-generation", model_name)
+        self.pipe = pipeline("text-generation", model_name, **kwargs)
         super().__init__()
 
     def generate(self, query: str, system_prompt: str, *args, **kwargs):
