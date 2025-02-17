@@ -1,3 +1,5 @@
+from pyexpat.errors import messages
+
 from transformers import pipeline
 from openai import OpenAI
 
@@ -12,11 +14,12 @@ class BaseLLM:
 
 class LocalLLM(BaseLLM):
     def __init__(self, model_name: str, *args, **kwargs):
-        self.pipe = pipeline("text-generation", model_name)
+        self.pipe = pipeline("text-generation", model_name, **kwargs)
         super().__init__()
 
     def generate(self, query: str, system_prompt: str, *args, **kwargs):
-        result = self.pipe(query)
+        message = '\n'.join([system_prompt, query])
+        result = self.pipe(message, **kwargs)
         return result[0]['generated_text'] if isinstance(result, list) else result
 
 
