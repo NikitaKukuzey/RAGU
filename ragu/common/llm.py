@@ -18,9 +18,12 @@ class LocalLLM(BaseLLM):
         super().__init__()
 
     def generate(self, query: str, system_prompt: str, *args, **kwargs):
-        message = '\n'.join([system_prompt, query])
-        result = self.pipe(message, **kwargs)
-        return result[0]['generated_text'] if isinstance(result, list) else result
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ]
+        result = self.pipe(messages, **kwargs)
+        return result[0]['generated_text'][2]['content'] if isinstance(result, list) else result
 
 
 class RemoteLLM(BaseLLM):
