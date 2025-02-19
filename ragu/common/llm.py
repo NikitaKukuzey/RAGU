@@ -1,7 +1,8 @@
 from pyexpat.errors import messages
 
-from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from openai import OpenAI
+import torch
 
 
 class BaseLLM:
@@ -14,7 +15,17 @@ class BaseLLM:
 
 class LocalLLM(BaseLLM):
     def __init__(self, model_name: str, *args, **kwargs):
-        self.pipe = pipeline("text-generation", model_name, **kwargs)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16,
+            attn_implementation="flash_attention_2",
+            device_map="auto"
+        )
+
+        self.pipe = pipeline(
+            "text-generation", model=self.model, tokenizer=self.tokenizer)
         super().__init__()
 
     def generate(self, query: str, system_prompt: str, *args, **kwargs):
