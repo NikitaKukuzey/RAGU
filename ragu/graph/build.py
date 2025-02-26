@@ -26,7 +26,7 @@ def detect_communities(graph: nx.Graph) -> List[Community]:
             for node, data in component_subgraph.nodes(data=True)
         ]
         relations = [
-            (u, v, data.get("label", ""))
+            (u, v, data.get("description", ""))
             for u, v, data in component_subgraph.edges(data=True)
         ]
         communities.append(Community(entities=entities, relations=relations))
@@ -54,7 +54,7 @@ def get_community_summaries(communities: List[Community], client: BaseLLM) -> Li
             f"Сущность: {entity}, описание: {description}" for entity, description in entities
         )
         relations_str = "\n".join(
-            f"{source} -> {label} -> {target}" for source, target, label in relations
+            f"{source} -> {target}, описание отношения:{description}" for source, target, description in relations
         )
         return f"{vertices_str}\n\nОтношения:\n{relations_str}"
 
@@ -101,7 +101,7 @@ class GraphBuilder:
         """
         Build a directed graph from the provided relations.
 
-        Each relation defines source and target nodes along with edge labels.
+        Each relation defines source and target nodes along with edge description.
 
         :param relations: List of Relation objects.
         :return: A directed NetworkX graph.
@@ -126,7 +126,7 @@ class GraphBuilder:
             graph.add_edge(
                 source_entity,
                 target_entity,
-                label=relation.description
+                description=relation.description
             )
 
         return graph

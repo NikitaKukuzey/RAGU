@@ -1,46 +1,43 @@
 import pandas as pd
 from tqdm import tqdm
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict
 
-from ragu.common.settings import settings
 from ragu.common.llm import BaseLLM
 from ragu.common.types import Node, Relation
-from ragu.utils.triplet_parser import parse_description
 
 
 def get_nodes(entities_df: pd.DataFrame) -> List[Node]:
     """
-    Converts a DataFrame containing entity information into a list of Node objects.
+    Converts a DataFrame of entities into a list of Node objects.
 
-    :param entities_df: DataFrame with columns 'Entity' and 'Description'.
-    :return: List of Node objects.
+    :param entities_df: DataFrame containing entity information with columns 'entity_name' and 'entity_description'.
+    :return: List of Node objects representing entities.
     """
     return [
         Node(
             id=int(idx),
-            entity=row['Entity'],
-            description=row['Description']
+            entity=row['entity_name'],
+            description=row['entity_description']
         )
         for idx, row in entities_df.iterrows()
     ]
 
 
-def get_relationships(relations_df: pd.DataFrame, nodes: List[Node]) -> List[Relation]:
+def get_edges(relations_df: pd.DataFrame, nodes: List[Node]) -> List[Relation]:
     """
-    Converts a DataFrame containing relationship data into a list of Relation objects.
+    Converts a DataFrame of relationships into a list of Relation objects.
 
-    :param relations_df: DataFrame with columns 'Source entity', 'Target entity', 'Relation', and 'Relation type'.
-    :param nodes: List of Node objects used to find corresponding entities.
-    :return: List of Relation objects.
+    :param relations_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description'.
+    :param nodes: List of Node objects used to map entities to their corresponding nodes.
+    :return: List of Relation objects representing relationships between entities.
     """
-    relations_df["Relation type"] = relations_df["Relation type"].astype(str)
     entity_to_node: Dict[str, Node] = {node.entity: node for node in nodes}
     relationships: List[Relation] = []
 
     for _, row in relations_df.iterrows():
-        source_entity = row['Source entity']
-        target_entity = row['Target entity']
-        relation_desc = row['Relation']
+        source_entity = row['source_entity']
+        target_entity = row['target_entity']
+        relation_desc = row['relationship_description']
 
         source_node = entity_to_node.get(source_entity)
         target_node = entity_to_node.get(target_entity)
@@ -56,113 +53,113 @@ def get_relationships(relations_df: pd.DataFrame, nodes: List[Node]) -> List[Rel
     return relationships
 
 
-class EntityExtractor:
+class EntitySummarizer:
     """
-    Extracts, merges, and summarizes entity descriptions using an LLM client.
+    A class for summarizing entity descriptions by merging and processing them using an LLM client.
     """
 
     @staticmethod
-    def extract(raw_data: pd.DataFrame, chunks: List[str], client: BaseLLM) -> pd.DataFrame:
+    def extract_summary(entities_df: pd.DataFrame, client: BaseLLM) -> pd.DataFrame:
         """
         Extracts and summarizes entity descriptions from raw data.
 
-        :param raw_data: DataFrame with columns 'Source entity', 'Relation', 'Target entity', and 'Chunk index'.
-        :param chunks: List of text fragments corresponding to raw data sections.
-        :param client: API client for processing and summarization.
-        :return: DataFrame containing entities and their summarized descriptions.
+        :param entities_df: DataFrame containing entity data with columns 'entity_name', 'entity_type', and 'entity_description'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with summarized entity descriptions.
         """
-        data = raw_data[['Source entity', 'Relation', 'Target entity', 'Chunk index']]
-        entities_description = EntityExtractor.get_description(data, chunks, client)
-        return EntityExtractor.summarize(entities_description, client)
-
-    @staticmethod
-    def get_description(data: pd.DataFrame, chunks: List[str], client: BaseLLM) -> pd.DataFrame:
-        """
-        Extracts and merges entity descriptions from data using an LLM client.
-
-        :param data: DataFrame with 'Source entity', 'Relation', 'Target entity', and 'Chunk index' columns.
-        :param chunks: List of text fragments corresponding to data sections.
-        :param client: API client for entity description extraction.
-        :return: DataFrame with merged entity descriptions.
-        """
-        from ragu.utils.default_prompts.entites_prompts import entites_info_prompt
-
-        report_data: List[Dict[str, str]] = []
-
-        for chunk_id, group in tqdm(data.groupby('Chunk index'), desc="Extracting entity descriptions"):
-            unique_entities = pd.concat([group['Source entity'], group['Target entity']]).unique().tolist()
-            text = f"Entity list: {unique_entities}\nText: {chunks[int(chunk_id)]}"
-
-            response = client.generate(text, entites_info_prompt)
-
-            parsed_response = parse_description(response)
-            if parsed_response:
-                report_data.extend(parsed_response)
-
-        report_df = pd.DataFrame(report_data, columns=['Entity', 'Description'])
-        return EntityExtractor.merge_entities(report_df)
+        merged_entities = EntitySummarizer.merge_entities(entities_df)
+        return EntitySummarizer.summarize(merged_entities, client)
 
     @staticmethod
     def merge_entities(entities_df: pd.DataFrame) -> pd.DataFrame:
-        # Group by 'Entity', aggregate the 'Description' by concatenating them,
-        # and then reset the index to ensure a DataFrame is returned.
-        return entities_df.groupby("Entity")["Description"].agg("".join).reset_index()
+        """
+        Merges entity descriptions by concatenating descriptions for each unique entity.
 
+        :param entities_df: DataFrame containing entity data with columns 'entity_name', 'entity_type', and 'entity_description'.
+        :return: DataFrame with merged entity descriptions and a count of descriptions per entity.
+        """
+        return entities_df.groupby("entity_name").agg({
+            "entity_type": "first",
+            "entity_description": " ".join,
+            "entity_name": "count"
+        }).rename(columns={"entity_name": "description_count"}).reset_index()
 
     @staticmethod
-    def summarize(data: pd.DataFrame, client: BaseLLM) -> pd.DataFrame:
+    def summarize(data: pd.DataFrame, client) -> pd.DataFrame:
         """
-        Summarizes entity descriptions using an LLM client.
+        Summarizes entity descriptions using an LLM client if an entity has multiple descriptions.
 
-        :param data: DataFrame with columns ['Entity', 'Description'].
-        :param client: API client for summarization.
-        :return: DataFrame with summarized entity descriptions.
+        :param data: DataFrame containing merged entity data with columns 'entity_name', 'entity_type', 'entity_description', and 'description_count'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with updated entity descriptions after summarization.
         """
         from ragu.utils.default_prompts.entites_prompts import entities_description_summary_prompt
-        summaries: List[Dict[str, str]] = []
 
-        for _, row in tqdm(data.iterrows(), desc='Summarizing entity descriptions', total=len(data)):
-            entity = row['Entity']
-            description = row['Description']
-            text = f"Entity: {entity}\nDescription: {description}"
+        for index, row in tqdm(data.iterrows(), desc='Summarizing entity descriptions', total=len(data)):
+            if row["description_count"] > 1:
+                text = f"Entity: {row['entity_name']}\nDescription: {row['entity_description']}"
+                response = client.generate(text, entities_description_summary_prompt)
+                data.at[index, "entity_description"] = response.strip()
 
-            response = client.generate(text, entities_description_summary_prompt)
-            summaries.append({'Entity': entity, 'Description': response.strip()})
-
-        summarization_table = pd.DataFrame(summaries)
-        summarization_table.to_csv('./temp/summarization_table.csv', index=False)
-        return summarization_table
+        return data
 
 
-class RelationExtractor:
+
+class RelationSummarizer:
     """
-    Extracts and merges relationships from triplet data.
+    A class for summarizing relationship descriptions by merging and processing them using an LLM client.
     """
 
     @staticmethod
-    def extract(triplets: List[Dict[str, str]], client: Any) -> pd.DataFrame:
+    def extract_summary(relationships_df: pd.DataFrame, client: Any) -> pd.DataFrame:
         """
-        Extracts and merges relationships from a list of triplets.
+        Extracts and summarizes relationship descriptions from raw data.
 
-        :param triplets: List of dictionaries representing relationship triplets.
-        :param client: API client (not used currently, reserved for future improvements).
-        :return: DataFrame containing relationship information.
+        :param relationships_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with summarized relationship descriptions.
         """
-        return RelationExtractor.merge_relationships(triplets)
+        merged_df = RelationSummarizer.merge_relationships(relationships_df)
+        merged_df.to_csv('temp/merged_df.csv')
+        return RelationSummarizer.summarize(merged_df, client)
 
     @staticmethod
-    def merge_relationships(relationships: Union[pd.DataFrame, List[Dict[str, str]]]) -> pd.DataFrame:
+    def merge_relationships(relationships: pd.DataFrame) -> pd.DataFrame:
         """
-        Merges relationship data into a DataFrame.
+        Merges relationship descriptions for each unique pair of source and target entities.
 
-        :param relationships: Relationship data as a DataFrame or list of dictionaries.
-        :return: DataFrame containing merged relationships.
+        :param relationships: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description'.
+        :return: DataFrame with merged relationship descriptions and a count of descriptions per relationship pair.
         """
+        merged_df = relationships.groupby(['source_entity', 'target_entity'])
+        def summarize_relations(group):
+            return pd.Series({
+                'relationship_description': " ".join(group['relationship_description']),
+                'description_count': len(group)
+            })
 
-        # merged_df = df.groupby(["Source entity", "Target entity"]).agg({
-        #     "Relation": list,
-        #     "Relation type": "first"
-        # }).reset_index()
-        # return merged_df
+        return merged_df.apply(summarize_relations).reset_index()
 
-        return pd.DataFrame(relationships) if not isinstance(relationships, pd.DataFrame) else relationships
+    @staticmethod
+    def summarize(data: pd.DataFrame, client) -> pd.DataFrame:
+        """
+        Summarizes relationship descriptions using an LLM client if a relationship has multiple descriptions.
+
+        :param data: DataFrame containing merged relationship data with columns 'source_entity', 'target_entity', 'relationship_description', and 'description_count'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with updated relationship descriptions after summarization.
+        """
+        from ragu.utils.default_prompts.entites_prompts import relationships_description_summary_prompt
+
+        for index, row in tqdm(data.iterrows(), desc='Summarizing relationship descriptions', total=len(data)):
+            if row["description_count"] > 1:
+
+                text = f"""
+                Source entity: {row['source_entity']}, Target entity: {row['target_entity']}\n
+                Description: {row['relationship_description']}
+                """
+
+                response = client.generate(text, relationships_description_summary_prompt)
+                data.at[index, "relationship_description"] = response.strip()
+
+        return data
