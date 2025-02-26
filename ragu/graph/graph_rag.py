@@ -69,7 +69,6 @@ class GraphRag:
             client=client,
         )
         chunks = self.chunker(documents)
-        print(chunks)
         entities, relationships = self.triplet(chunks, client=client)
 
         entities = EntitySummarizer.extract_summary(entities, client=client)
