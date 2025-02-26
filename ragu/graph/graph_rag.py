@@ -124,17 +124,17 @@ class GraphRag:
         """
         nx.write_gml(self.graph, path)
 
-    def save_community_summary(self, path: str) -> None:
-        """
-        Saves the community summary to a text file.
 
-        :param path: Path where the summary will be saved.
-        """
+    def save_community_summary(self, path: str) -> None:
         if self.community_summary is None:
             raise ValueError("No community summary available to save.")
 
+        # Join list elements into a string separated by newlines
+        summary_str = "\n".join(map(str, self.community_summary))
+        
         with open(path, "w") as f:
-            f.write(self.community_summary)
+            f.write(summary_str)
+
 
     def load_community_summary(self, path: str) -> None:
         """
