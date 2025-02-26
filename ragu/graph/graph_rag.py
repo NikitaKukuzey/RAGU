@@ -2,9 +2,9 @@ import networkx as nx
 from typing import List, Optional, Any
 
 from ragu import (
-    Chunker, 
-    TripletExtractor, 
-    Reranker, 
+    Chunker,
+    TripletExtractor,
+    Reranker,
     Generator
 )
 
@@ -19,19 +19,19 @@ from ragu.graph.build import GraphBuilder
 from ragu.common.llm import BaseLLM
 
 from ragu.graph.graph_items import (
-    EntityExtractor,
-    RelationExtractor,
+    EntitySummarizer,
+    RelationSummarizer,
     get_nodes,
-    get_relationships
+    get_edges
 )
 
 
 class GraphRag:
     """
-    A pipeline for building and querying a knowledge graph using extracted triplets
+    A pipeline for building, querying, and visualizing a knowledge graph using extracted triplets
     and community-based summarization.
     """
-    
+
     def __init__(
             self,
             chunker_parameters: ChunkerParameters,
@@ -40,47 +40,53 @@ class GraphRag:
             generator_parameters: GeneratorParameters,
     ) -> None:
         """
-        Initializes the GraphRag pipeline components based on the provided configuration.
+        Initializes the GraphRag pipeline with configured components for chunking, triplet extraction,
+        reranking, and generation.
 
-        :param config: Configuration object containing parameters for chunking,
-                       triplet extraction, reranking, and generation.
+        :param chunker_parameters: Configuration parameters for the chunker.
+        :param triplet_extractor_parameters: Configuration parameters for the triplet extractor.
+        :param reranker_parameters: Configuration parameters for the reranker.
+        :param generator_parameters: Configuration parameters for the generator.
         """
         self.chunker = Chunker.get(**chunker_parameters)
         self.triplet = TripletExtractor.get(**triplet_extractor_parameters)
         self.reranker = Reranker.get(**reranker_parameters)
         self.generator = Generator.get(**generator_parameters)
-        
+
         self.graph = None
         self.community_summary: Optional[str] = None
 
     def build(self, documents: List[str], client: BaseLLM) -> "GraphRag":
         """
-        Builds the knowledge graph from a list of documents.
+        Builds a knowledge graph from a list of documents by chunking, extracting triplets,
+        summarizing entities and relationships, and constructing the graph.
 
-        :param documents: List of textual documents.
+        :param documents: List of textual documents to process.
         :param client: API client for processing and summarization.
-        :return: Instance of GraphRag with a built graph and community summaries.
+        :return: Instance of GraphRag with the built graph and community summaries.
         """
         graph_builder = GraphBuilder(
             client=client,
         )
         chunks = self.chunker(documents)
-        triplets = self.triplet(chunks, client=client)
+        print(chunks)
+        entities, relationships = self.triplet(chunks, client=client)
 
-        entities = EntityExtractor.extract(triplets, chunks, client=client)
-        relationships = RelationExtractor.extract(triplets, client=client)
+        entities = EntitySummarizer.extract_summary(entities, client=client)
+        relationships = RelationSummarizer.extract_summary(relationships, client=client)
 
         nodes = get_nodes(entities)
-        edges = get_relationships(relationships, nodes)
+        edges = get_edges(relationships, nodes)
 
         self.graph, self.community_summary = graph_builder(edges)
-        self.save_graph('temp/graph.gml')
+        self.save_graph('graph.gml')
 
         return self
 
     def __call__(self, query: str, client: BaseLLM) -> Any:
         """
-        Handles queries by retrieving relevant information from the knowledge graph.
+        Processes a user query by retrieving relevant information from the knowledge graph
+        and generating a response.
 
         :param query: User query string.
         :param client: API client for response generation.
@@ -89,10 +95,10 @@ class GraphRag:
         return self.get_response(query, client)
 
     def load_knowledge_graph(
-            self, 
-            path_to_graph: str, 
+            self,
+            path_to_graph: str,
             path_to_community_summary: Optional[str] = None
-        ) -> None:
+    ) -> None:
         """
         Loads a previously saved knowledge graph and optionally its community summary.
 
@@ -127,7 +133,7 @@ class GraphRag:
         """
         if self.community_summary is None:
             raise ValueError("No community summary available to save.")
-        
+
         with open(path, "w") as f:
             f.write(self.community_summary)
 
@@ -142,7 +148,8 @@ class GraphRag:
 
     def get_response(self, query: str, client: Any) -> Any:
         """
-        Retrieves relevant information from the knowledge graph in response to a query.
+        Retrieves relevant information from the knowledge graph in response to a query
+        and generates a response using the generator.
 
         :param query: User query string.
         :param client: API client for response generation.
@@ -150,13 +157,13 @@ class GraphRag:
         """
         if self.community_summary is None:
             raise RuntimeError("Graph is not built. Please build or load the graph first.")
-        
+
         relevant_chunks = self.reranker(query, self.community_summary)
         return self.generator(query, relevant_chunks, client)
 
     def visualize(self) -> None:
         """
-        Visualizes the knowledge graph with node degree coloring.
+        Visualizes the knowledge graph with node degree coloring using matplotlib.
         """
         from matplotlib.colors import LinearSegmentedColormap
         import matplotlib.pyplot as plt
