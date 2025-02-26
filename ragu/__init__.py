@@ -1,4 +1,4 @@
-from ragu.chunker.base_chunker import Chunker 
+from ragu.chunker.base_chunker import Chunker
 from ragu.triplet.base_triplet import TripletExtractor
 from ragu.reranker.base_reranker import Reranker
 from ragu.generate.base_generator import Generator

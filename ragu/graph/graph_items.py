@@ -104,6 +104,7 @@ class EntitySummarizer:
         return data
 
 
+
 class RelationSummarizer:
     """
     A class for summarizing relationship descriptions by merging and processing them using an LLM client.
