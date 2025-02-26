@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Any
+from typing import List, Tuple
 from tqdm import tqdm
 
 from ragu.common.settings import settings
@@ -10,45 +10,44 @@ from ragu.triplet.base_triplet import TripletExtractor
 @TripletExtractor.register("original")
 class TripletLLM(TripletExtractor):
     """
-    Extracts triplets using a large language model (LLM).
+    A class for extracting entities and relationships (triplets) from text using a large language model (LLM).
     """
-    
-    def __init__(self, class_name: str, validate: bool) -> None:
+    def __init__(self, class_name: str, validate: bool):
         """
-        Initializes the LLM-based triplet extractor.
+        Initializes the TripletLLM extractor.
+
+        :param class_name: Name of the class (used for registration).
+        :param validate: Whether to validate the extracted triplets (not used in this implementation).
         """
         super().__init__()
-        self.validate = validate
 
-    def extract_entities_and_relationships(self, elements: List[str], client: BaseLLM) -> pd.DataFrame:
+    def extract_entities_and_relationships(self, text: List[str], client: BaseLLM) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Uses an LLM to extract entities and relationships from the input text and returns a DataFrame.
+        Extracts entities and relationships from a list of text chunks using an LLM.
 
-        :param elements: The input text to process.
-        :param client: External API client for LLM interaction.
-        :return: A pandas DataFrame with extracted relations.
+        :param text: List of text chunks to process.
+        :param client: API client for interacting with the LLM.
+        :return: A tuple containing two DataFrames:
+                 - The first DataFrame contains extracted entities with columns 'entity_name', 'entity_type', and 'chunk_id'.
+                 - The second DataFrame contains extracted relationships with columns 'source_entity', 'target_entity', 'relationship_description', and 'chunk_id'.
         """
-        from ragu.utils.default_prompts.triplet_maker_prompts import tripler_system_prompts
-        from ragu.utils.triplet_parser import parse_relations
+        from ragu.utils.default_prompts.triplet_maker_prompts import triplet_system_prompts
+        from ragu.utils.triplet_parser import parse_llm_response
 
-        results = []
+        entities = []
+        relations = []
+        for i, text in tqdm(enumerate(text), desc='Extracting entities and relationships', total=len(text)):
+            raw_data = client.generate(text, triplet_system_prompts)
+            current_chunk_entities, current_chunk_relations = parse_llm_response(raw_data)
 
-        for i, text in tqdm(enumerate(elements), desc='Index create: extract entities'):
-            raw_relations = client.generate(text, tripler_system_prompts)
-            extracted_relations = parse_relations(raw_relations)
+            # Add chunk ID to track the source of each entity and relationship
+            current_chunk_entities['chunk_id'] = i
+            current_chunk_relations['chunk_id'] = i
 
-            for relation in extracted_relations:
-                results.append((*relation, i))
+            entities.append(current_chunk_entities)
+            relations.append(current_chunk_relations)
 
-        df = pd.DataFrame(results, columns=[
-            "Source entity",
-            "Source entity type",
-            "Relation",
-            "Relation type",
-            "Target entity",
-            "Target entity type",
-            "Chunk index"
-        ])
+        entities = pd.concat(entities)
+        relations = pd.concat(relations)
 
-        return df
-
+        return entities, relations
