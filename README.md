@@ -77,14 +77,6 @@ if __name__ == "__main__":
     main()
 ```
 
-### Running the Example
-
-To run the example, use the following command:
-
-```bash
-python3 example.py
-```
-
 ## Configuration
 
 RAGu uses Hydra for configuration management. The default configuration file is located at `configs/default.yaml`. You can customize the configuration by modifying this file or by passing additional configuration files.
