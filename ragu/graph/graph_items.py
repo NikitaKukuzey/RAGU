@@ -120,7 +120,6 @@ class RelationSummarizer:
         :return: DataFrame with summarized relationship descriptions.
         """
         merged_df = RelationSummarizer.merge_relationships(relationships_df)
-        merged_df.to_csv('temp/merged_df.csv')
         return RelationSummarizer.summarize(merged_df, client)
 
     @staticmethod
