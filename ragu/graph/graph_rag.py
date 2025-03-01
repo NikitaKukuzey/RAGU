@@ -1,6 +1,8 @@
 import networkx as nx
 from typing import List, Optional, Any
 
+import pandas as pd
+
 from ragu import (
     Chunker,
     TripletExtractor,
@@ -17,6 +19,7 @@ from ragu.common.parameters import (
 
 from ragu.graph.build import GraphBuilder
 from ragu.common.llm import BaseLLM
+from ragu.common.settings import log_outputs
 
 from ragu.graph.graph_items import (
     EntitySummarizer,
@@ -70,9 +73,13 @@ class GraphRag:
         )
         chunks = self.chunker(documents)
         entities, relationships = self.triplet(chunks, client=client)
+        log_outputs(entities, 'entities')
+        log_outputs(relationships, 'relationships')
 
         entities = EntitySummarizer.extract_summary(entities, client=client)
         relationships = RelationSummarizer.extract_summary(relationships, client=client)
+        log_outputs(entities, 'summarized_entities')
+        log_outputs(relationships, 'summarized_relationships')
 
         nodes = get_nodes(entities)
         edges = get_edges(relationships, nodes)
