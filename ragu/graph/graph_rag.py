@@ -89,8 +89,6 @@ class GraphRag:
 
         self.graph, self.community_summary = graph_builder(edges)
 
-        self.save_graph('graph.gml')
-
         return self
 
     def __call__(self, query: str, client: BaseLLM) -> Any:
