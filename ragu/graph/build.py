@@ -137,7 +137,7 @@ class GraphBuilder:
     3. Generate summaries for each community using a language model.
     """
 
-    def __init__(self, client: Any, which_level: int = 0) -> None:
+    def __init__(self, client: Any, which_level: int = -1) -> None:
         """
         Initialize the GraphBuilder.
 
