@@ -2,7 +2,7 @@ import pandas as pd
 from typing import List, Tuple
 from tqdm import tqdm
 
-from ragu.common.settings import settings
+import ragu.common.settings
 from ragu.common.llm import BaseLLM
 from ragu.triplet.base_triplet import TripletExtractor
 
@@ -12,7 +12,7 @@ class TripletLLM(TripletExtractor):
     """
     A class for extracting entities and relationships (triplets) from text using a large language model (LLM).
     """
-    def __init__(self, class_name: str, validate: bool):
+    def __init__(self, class_name: str, validate: bool, entity_list_type: str):
         """
         Initializes the TripletLLM extractor.
 
@@ -20,6 +20,7 @@ class TripletLLM(TripletExtractor):
         :param validate: Whether to validate the extracted triplets (not used in this implementation).
         """
         super().__init__()
+        self.entity_list_type = entity_list_type
 
     def extract_entities_and_relationships(self, text: List[str], client: BaseLLM) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -31,11 +32,13 @@ class TripletLLM(TripletExtractor):
                  - The first DataFrame contains extracted entities with columns 'entity_name', 'entity_type', and 'chunk_id'.
                  - The second DataFrame contains extracted relationships with columns 'source_entity', 'target_entity', 'relationship_description', and 'chunk_id'.
         """
-        from ragu.utils.default_prompts.triplet_maker_prompts import triplet_system_prompts
+        from ragu.utils.default_prompts.triplet_maker_prompts import prompts
         from ragu.utils.triplet_parser import parse_llm_response
 
         entities = []
         relations = []
+        triplet_system_prompts = prompts[self.entity_list_type]
+        print(triplet_system_prompts)
         for i, text in tqdm(enumerate(text), desc='Extracting entities and relationships', total=len(text)):
             raw_data = client.generate(text, triplet_system_prompts)
             current_chunk_entities, current_chunk_relations = parse_llm_response(raw_data)

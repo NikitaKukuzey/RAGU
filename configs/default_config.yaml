@@ -6,6 +6,7 @@ chunker:
 triplet:
   class_name: 'original'
   validate: False
+  entity_list_type: 'nerel' # Can be default of nerel
 
 generator:
   class_name: 'original_generator'
