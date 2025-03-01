@@ -1,3 +1,4 @@
+import json
 import logging
 
 import networkx as nx
@@ -59,7 +60,7 @@ class GraphRag:
         self.generator = Generator.get(**generator_parameters)
 
         self.graph = None
-        self.community_summary: Optional[str] = None
+        self.community_summary: Optional[dict] = None
 
     def build(self, documents: List[str], client: BaseLLM) -> "GraphRag":
         """
@@ -107,7 +108,7 @@ class GraphRag:
             self,
             path_to_graph: str,
             path_to_community_summary: Optional[str] = None
-    ) -> None:
+    ) -> "GraphRag":
         """
         Loads a previously saved knowledge graph and optionally its community summary.
 
@@ -118,42 +119,50 @@ class GraphRag:
         if path_to_community_summary:
             self.load_community_summary(path_to_community_summary)
 
-    def load_graph(self, path: str) -> None:
+        return self
+
+    def load_graph(self, path: str) -> "GraphRag":
         """
         Loads a knowledge graph from a GML file.
 
         :param path: Path to the GML file.
         """
         self.graph = nx.read_gml(path)
+        return self
 
-    def save_graph(self, path: str) -> None:
+    def save_graph(self, path: str) -> "GraphRag":
         """
         Saves the current knowledge graph to a GML file.
 
         :param path: Path where the graph will be saved.
         """
         nx.write_gml(self.graph, path)
+        return self
 
+    def save_community_summary(self, path: str) -> "GraphRag":
+        """
+        Saves the community summary to a json.
 
-    def save_community_summary(self, path: str) -> None:
+        :param path: Path where the summary will be saved.
+        """
         if self.community_summary is None:
             raise ValueError("No community summary available to save.")
 
-        # Join list elements into a string separated by newlines
-        summary_str = "\n".join(map(str, self.community_summary))
-        
-        with open(path, "w") as f:
-            f.write(summary_str)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.community_summary, f, ensure_ascii=False, indent=4)
 
+        return self
 
-    def load_community_summary(self, path: str) -> None:
+    def load_community_summary(self, path: str) -> "GraphRag":
         """
-        Loads the community summary from a text file.
+        Loads the community summary from a json.
 
         :param path: Path to the saved summary file.
         """
-        with open(path, "r") as f:
-            self.community_summary = f.read()
+        with open(path, "r", encoding="utf-8") as f:
+            self.community_summary = {int(k): v for k, v in json.load(f).items()}
+
+        return self
 
     def get_response(self, query: str, client: Any, which_level: int = 0) -> Any:
         """
@@ -168,17 +177,17 @@ class GraphRag:
         if self.community_summary is None:
             raise RuntimeError("Graph is not built. Please build or load the graph first.")
 
-        try:
-            community_summary = self.community_summary[which_level]
-        except IndexError:
-            logging.log(logging.ERROR, "No summary available for the specified level. Get 0 level summary instead.")
-            community_summary = self.community_summary[0]
+
+        community_summary = self.community_summary.get(which_level, None)
+        if community_summary is None:
+            logging.log(logging.ERROR, f"No summary available for the specified level: {which_level}. Get 0 level summary instead.")
+            community_summary = self.community_summary.get(0)
 
         # Use the reranker to retrieve relevant chunks from the community summary
         relevant_chunks = self.reranker(query, community_summary)
         return self.generator(query, relevant_chunks, client)
 
-    def visualize(self) -> None:
+    def visualize(self) -> "GraphRag":
         """
         Visualizes the knowledge graph with node degree coloring using matplotlib.
         """
@@ -225,3 +234,5 @@ class GraphRag:
 
         plt.title("GML Graph Visualization with Node Degree Coloring")
         plt.show()
+
+        return self
