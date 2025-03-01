@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from networkx import Graph
 from tqdm import tqdm
 from typing import List, Tuple, Any, Hashable, Dict, Set
 
@@ -146,7 +147,7 @@ class GraphBuilder:
         self.client = client
         self.which_level = which_level
 
-    def __call__(self, relations: List[Relation]) -> Tuple[nx.DiGraph, List[str]]:
+    def __call__(self, relations: List[Relation]) -> tuple[Graph, dict[int, list[str]]]:
         """
         Execute the graph processing pipeline.
 
@@ -165,11 +166,12 @@ class GraphBuilder:
         else:
             levels = [self.which_level]
 
-        # TODO: Add support for multiple levels
-        community_summaries = []
+        community_summaries = {}
         for level in levels:
             list_of_communities_at_level = list(communities.get(level).values())
-            community_summaries = get_community_summaries(list_of_communities_at_level, self.client)
+            community_summaries_at_level = get_community_summaries(list_of_communities_at_level, self.client)
+            community_summaries[level] = community_summaries_at_level
+
         return graph, community_summaries
 
     def build_graph(self, relations: List[Relation]) -> nx.Graph:

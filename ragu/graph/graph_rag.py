@@ -1,3 +1,5 @@
+import logging
+
 import networkx as nx
 from typing import List, Optional, Any
 
@@ -85,6 +87,7 @@ class GraphRag:
         edges = get_edges(relationships, nodes)
 
         self.graph, self.community_summary = graph_builder(edges)
+
         self.save_graph('graph.gml')
 
         return self
@@ -152,11 +155,12 @@ class GraphRag:
         with open(path, "r") as f:
             self.community_summary = f.read()
 
-    def get_response(self, query: str, client: Any) -> Any:
+    def get_response(self, query: str, client: Any, which_level: int = 0) -> Any:
         """
         Retrieves relevant information from the knowledge graph in response to a query
         and generates a response using the generator.
 
+        :param which_level:
         :param query: User query string.
         :param client: API client for response generation.
         :return: Generated response.
@@ -164,7 +168,14 @@ class GraphRag:
         if self.community_summary is None:
             raise RuntimeError("Graph is not built. Please build or load the graph first.")
 
-        relevant_chunks = self.reranker(query, self.community_summary)
+        try:
+            community_summary = self.community_summary[which_level]
+        except IndexError:
+            logging.log(logging.ERROR, "No summary available for the specified level. Get 0 level summary instead.")
+            community_summary = self.community_summary[0]
+
+        # Use the reranker to retrieve relevant chunks from the community summary
+        relevant_chunks = self.reranker(query, community_summary)
         return self.generator(query, relevant_chunks, client)
 
     def visualize(self) -> None:
