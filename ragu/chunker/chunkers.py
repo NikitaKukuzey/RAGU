@@ -4,6 +4,7 @@ from typing import List
 
 from razdel import sentenize
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 from ragu.chunker.base_chunker import Chunker
 from ragu.common.types import Chunk
@@ -99,7 +100,7 @@ class SemanticTextChunker(Chunker):
         :param document: Input document.
         :return: Document embedding as a NumPy array.
         """
-        embeddings = self.model.encode(document, convert_to_tensor=True)
+        embeddings = self.model.encode(document, convert_to_tensor=True, show_progress_bar=False)
         return embeddings.cpu().numpy()
 
     def compute_similarities(self, chunks: List[Chunk]) -> np.ndarray:
@@ -156,7 +157,7 @@ class SemanticTextChunker(Chunker):
         :return: List of semantically split text chunks.
         """
         all_chunks = []
-        for document in documents:
+        for document in tqdm(documents, desc="Splitting documents"):
             sentences = self.split_text_by_chunks(document)
             similarities = self.compute_similarities(sentences)
             chunks = self.join_chunks_by_semantics(sentences, similarities)
