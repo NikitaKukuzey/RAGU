@@ -21,6 +21,7 @@ class TripletLLM(TripletExtractor):
         """
         super().__init__()
         self.entity_list_type = entity_list_type
+        self.validate = validate
 
     def extract_entities_and_relationships(self, text: List[str], client: BaseLLM) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -38,9 +39,12 @@ class TripletLLM(TripletExtractor):
         entities = []
         relations = []
         triplet_system_prompts = prompts[self.entity_list_type]
-        print(triplet_system_prompts)
         for i, text in tqdm(enumerate(text), desc='Extracting entities and relationships', total=len(text)):
             raw_data = client.generate(text, triplet_system_prompts)
+
+            if self.validate:
+                raw_data = self.validate_triplets(text, raw_data, client)
+
             current_chunk_entities, current_chunk_relations = parse_llm_response(raw_data)
 
             # Add chunk ID to track the source of each entity and relationship
@@ -54,3 +58,17 @@ class TripletLLM(TripletExtractor):
         relations = pd.concat(relations)
 
         return entities, relations
+
+    def validate_triplets(self, text: str, raw_triplets: str, client: BaseLLM):
+        """
+        Validate the triplets extracted from the text using the LLM.
+        :param raw_triplets:
+        :param text:
+        :param client:
+        :return:
+        """
+        from ragu.utils.default_prompts.triplet_maker_prompts import validation_prompts
+
+        prompt = "Текст:\n" + text + "\n\nТриплеты:\n" + raw_triplets
+        validation_triplet_system_prompts = validation_prompts[self.entity_list_type]
+        return client.generate(prompt, validation_triplet_system_prompts)
