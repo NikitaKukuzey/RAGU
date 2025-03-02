@@ -1,5 +1,9 @@
+import logging
+
 import pandas as pd
 from typing import List, Tuple
+
+import requests
 from tqdm import tqdm
 
 import ragu.common.settings
@@ -72,3 +76,45 @@ class TripletLLM(TripletExtractor):
         prompt = "Текст:\n" + text + "\n\nТриплеты:\n" + raw_triplets
         validation_triplet_system_prompts = validation_prompts[self.entity_list_type]
         return client.generate(prompt, validation_triplet_system_prompts)
+
+
+# TODO: add relation extraction and definition generation
+@TripletExtractor.register("composed")
+class ComposedTripletExtractor(TripletExtractor):
+    def __init__(self, class_name: str, entity_list_type: str, ner_url: str):
+        super().__init__()
+        self.entity_list_type = entity_list_type
+        self.ner_url = ner_url
+
+        # Use english version of the dictionary because bond_005 NER returns only English entity types
+        from ragu.utils.default_prompts.triplet_maker_prompts import english_entities_dict
+        self.valid_entities = english_entities_dict.get(entity_list_type, set())
+
+    def extract_entities_and_relationships(self, texts: List[str], *args, **kwargs) -> pd.DataFrame:
+        """
+        Extract entities from a list of texts using a named entity recognition (NER) API.
+        """
+        extracted_entities = []
+
+        for i, text_chunk in tqdm(enumerate(texts), desc="Extracting entities and relationships"):
+            entities_df = self.request_ner(text_chunk)
+            entities_df["chunk_id"] = i
+            extracted_entities.append(entities_df)
+
+        return pd.concat(extracted_entities, ignore_index=True) if extracted_entities \
+            else pd.DataFrame(columns=["entity", "entity_type", "chunk_id"])
+
+    def request_ner(self, text: str) -> pd.DataFrame:
+        """
+        Sends a request to the NER API and extracts valid entities from the response.
+        """
+        try:
+            response = requests.post(self.ner_url, json=text)
+            response.raise_for_status()
+            entities = response.json().get("ners", [])
+        except requests.RequestException as e:
+            logging.error(f"NER request failed: {e}")
+            return pd.DataFrame(columns=["entity", "entity_type"])
+
+        data = [(text[start:end], ent_type) for start, end, ent_type in entities if ent_type in self.valid_entities]
+        return pd.DataFrame(data, columns=["entity", "entity_type"])

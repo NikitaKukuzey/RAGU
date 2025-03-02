@@ -69,7 +69,7 @@ def _generate_validation_prompt(entity_list):
 **Текст:**  
 """
 
-default_entities = ["ОРГАНИЗАЦИЯ", "ПЕРСОНА", "МЕСТОПОЛОЖЕНИЕ"]
+default_entities = ["ОРГАНИЗАЦИЯ", "ПЕРСОНА", "МЕСТОПОЛОЖЕНИЕ", "СОБЫТИЕ"]
 nerel_entities = [
     "ВОЗРАСТ",
     "СЕМЬЯ",
@@ -100,6 +100,47 @@ nerel_entities = [
     'ОБЪЕКТ',
     'ОРГАНИЗАЦИЯ']
 
+english_default_entities = [
+    "ORGANIZATION",
+    "PERSON",
+    "LOCATION",
+    "EVENT"
+]
+
+english_nerel_entities = [
+    "AGE",
+    "FAMILY",
+    "AWARD",
+    'IDEOLOGY',
+    'PERCENT',
+    'CITY',
+    'LANGUAGE',
+    'PERSON',
+    'COUNTRY',
+    'LAW',
+    'PRODUCT',
+    'CRIME',
+    'PENALTY',
+    'PROFESSION',
+    'DATE',
+    'MONEY',
+    'RELIGION',
+    'DISEASE',
+    'NATIONALITY',
+    'STATE_OR_PROV',
+    'ORDINAL',
+    'TIME',
+    'EVENT',
+    'DISTRICT',
+    'WORK_OF_ART',
+    'ORGANIZATION',
+    'FACILITY',
+    'NUMBER',
+    'LOCATION',
+]
+
+
+# PROMPTS
 prompts = {
     'default':  generate_prompt(default_entities),
     'nerel': generate_prompt(nerel_entities)
@@ -108,4 +149,9 @@ prompts = {
 validation_prompts = {
     'default': _generate_validation_prompt(default_entities),
     'nerel': _generate_validation_prompt(nerel_entities)
+}
+
+english_entities_dict = {
+    'default': english_default_entities,
+    'nerel': english_nerel_entities,
 }
