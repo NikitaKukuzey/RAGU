@@ -11,7 +11,6 @@ from graspologic.partition import (
 )
 
 from ragu.common.types import Relation, Community
-from ragu.common.settings import settings
 from ragu.common.llm import BaseLLM
 from ragu.common.batch_generator import BatchGenerator
 from ragu.utils.default_prompts.community_summary_prompt import prompt

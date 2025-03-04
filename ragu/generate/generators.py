@@ -1,10 +1,10 @@
 import re
-import logging
 from tqdm import tqdm
 
 from ragu import Generator
 from ragu.common.batch_generator import BatchGenerator
 from ragu.common.llm import BaseLLM
+from ragu.common.logger import logging
 
 
 @Generator.register("original_generator")
@@ -57,7 +57,6 @@ class OriginalGenerator(Generator):
                     continue
 
                 digits_only = re.sub(r'\D', '', answer_parts[0])
-
                 if digits_only == "" or digits_only is None:
                     logging.error(f"Rating is not a number. Text: {answer}")
 

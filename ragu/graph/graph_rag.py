@@ -23,7 +23,7 @@ from ragu.common.parameters import (
 
 from ragu.graph.build import GraphBuilder
 from ragu.common.llm import BaseLLM
-from ragu.common.settings import log_outputs
+from ragu.common.logger import log_outputs
 
 from ragu.graph.graph_items import (
     EntitySummarizer,
