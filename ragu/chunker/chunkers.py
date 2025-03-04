@@ -126,7 +126,7 @@ class SemanticTextChunker(Chunker):
         """
         Merges chunks based on semantic similarity, ensuring chunk sizes do not exceed the limit.
 
-        :param chunks: List of sentence-based chunks.
+        :param sentences: List of sentence-based chunks.
         :param similarities: Pairwise similarity scores between chunks.
         :return: List of semantically merged text chunks.
         """
@@ -157,7 +157,7 @@ class SemanticTextChunker(Chunker):
         :return: List of semantically split text chunks.
         """
         all_chunks = []
-        for document in tqdm(documents, desc="Splitting documents"):
+        for document in tqdm(documents, desc="Index creation: splitting documents"):
             sentences = self.split_text_by_chunks(document)
             similarities = self.compute_similarities(sentences)
             chunks = self.join_chunks_by_semantics(sentences, similarities)
