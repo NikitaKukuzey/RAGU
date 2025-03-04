@@ -13,6 +13,7 @@ from graspologic.partition import (
 from ragu.common.types import Relation, Community
 from ragu.common.settings import settings
 from ragu.common.llm import BaseLLM
+from ragu.common.batch_generator import BatchGenerator
 from ragu.utils.default_prompts.community_summary_prompt import prompt
 
 
@@ -43,7 +44,7 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
 
     # Structure: level -> cluster_id -> (nodes, edges)
     clusters: Dict[int, Dict[int, Set]] = defaultdict(
-        lambda: defaultdict(lambda: {'nodes': set(), 'edges': set()})
+        lambda: defaultdict(lambda: {"nodes": set(), "edges": set()})
     )
 
     for partition in community_mapping:
@@ -51,12 +52,12 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
         cluster_id = partition.cluster
         node = partition.node
 
-        clusters[level][cluster_id]['nodes'].add(node)
+        clusters[level][cluster_id]["nodes"].add(node)
 
         for neighbor in graph.neighbors(node):
-            if neighbor in clusters[level][cluster_id]['nodes']:
+            if neighbor in clusters[level][cluster_id]["nodes"]:
                 edge_data = graph.get_edge_data(node, neighbor)
-                clusters[level][cluster_id]['edges'].add(
+                clusters[level][cluster_id]["edges"].add(
                     (node, neighbor, edge_data.get("description", ""))
                 )
 
@@ -65,8 +66,8 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
 
     for level in clusters:
         for cluster_id in clusters[level]:
-            nodes = clusters[level][cluster_id]['nodes']
-            edges = clusters[level][cluster_id]['edges']
+            nodes = clusters[level][cluster_id]["nodes"]
+            edges = clusters[level][cluster_id]["edges"]
 
             subgraph = graph.subgraph(nodes)
 
@@ -88,13 +89,14 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
     return dict(result)
 
 
-def get_community_summaries(communities: List[Community], client: BaseLLM) -> List[str]:
+def get_community_summaries(communities: List[Community], client: BaseLLM, batch_size: int) -> List[str]:
     """
     Generate summaries for each community using a language model (LLM).
 
     This function composes a textual representation of each community (including its entities
     and relations) and uses the LLM client to generate a summary.
 
+    :param batch_size:
     :param communities: A list of Community objects to summarize.
     :param client: An API client for interacting with the LLM.
     :return: A list of summaries, one for each community.
@@ -119,10 +121,11 @@ def get_community_summaries(communities: List[Community], client: BaseLLM) -> Li
         return f"{vertices_str}\n\nОтношения:\n{relations_str}"
 
     summaries = []
-    for community in tqdm(communities, desc='Index create: community summary'):
-        community_text = compose_community_string(community.entities, community.relations)
-        summary = client.generate(community_text, prompt).strip()
-        summaries.append(summary)
+    batch_generator = BatchGenerator(communities, batch_size=batch_size)
+    for batch in tqdm(batch_generator.get_batches(), desc="Index creation: community summary", total=len(batch_generator)):
+        community_text = [compose_community_string(community.entities, community.relations) for community in batch]
+        summary = client.generate(community_text, prompt)
+        summaries.extend(summary)
 
     return summaries
 
@@ -137,7 +140,7 @@ class GraphBuilder:
     3. Generate summaries for each community using a language model.
     """
 
-    def __init__(self, client: Any, which_level: int = -1) -> None:
+    def __init__(self, client: Any, batch_size: int=16, which_level: int = -1) -> None:
         """
         Initialize the GraphBuilder.
 
@@ -145,6 +148,7 @@ class GraphBuilder:
         :param which_level: The hierarchy level to analyze. Use -1 to analyze all levels.
         """
         self.client = client
+        self.batch_size = batch_size
         self.which_level = which_level
 
     def __call__(self, relations: List[Relation]) -> tuple[Graph, dict[int, list[str]]]:
@@ -169,7 +173,11 @@ class GraphBuilder:
         community_summaries = {}
         for level in levels:
             list_of_communities_at_level = list(communities.get(level).values())
-            community_summaries_at_level = get_community_summaries(list_of_communities_at_level, self.client)
+            community_summaries_at_level = get_community_summaries(
+                list_of_communities_at_level,
+                self.client,
+                self.batch_size
+            )
             community_summaries[level] = community_summaries_at_level
 
         return graph, community_summaries
