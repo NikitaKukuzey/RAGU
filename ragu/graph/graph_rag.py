@@ -10,7 +10,7 @@ from ragu import (
     Chunker,
     TripletExtractor,
     Reranker,
-    Generator
+    Generator,
 )
 
 from ragu.common.parameters import (
@@ -18,6 +18,7 @@ from ragu.common.parameters import (
     TripletExtractorParameters,
     RerankerParameters,
     GeneratorParameters,
+    GraphParameters,
 )
 
 from ragu.graph.build import GraphBuilder
@@ -28,7 +29,7 @@ from ragu.graph.graph_items import (
     EntitySummarizer,
     RelationSummarizer,
     get_nodes,
-    get_edges
+    get_edges,
 )
 
 
@@ -40,10 +41,12 @@ class GraphRag:
 
     def __init__(
             self,
+            client: BaseLLM,
             chunker_parameters: ChunkerParameters,
             triplet_extractor_parameters: TripletExtractorParameters,
             reranker_parameters: RerankerParameters,
             generator_parameters: GeneratorParameters,
+            graph_builder_parameters: GraphParameters,
     ) -> None:
         """
         Initializes the GraphRag pipeline with configured components for chunking, triplet extraction,
@@ -54,40 +57,49 @@ class GraphRag:
         :param reranker_parameters: Configuration parameters for the reranker.
         :param generator_parameters: Configuration parameters for the generator.
         """
+        self.client = client
+
         self.chunker = Chunker.get(**chunker_parameters)
         self.triplet = TripletExtractor.get(**triplet_extractor_parameters)
         self.reranker = Reranker.get(**reranker_parameters)
         self.generator = Generator.get(**generator_parameters)
+        self.graph_builder = GraphBuilder(client=client, **graph_builder_parameters)
 
         self.graph = None
         self.community_summary: Optional[dict] = None
 
-    def build(self, documents: List[str], client: BaseLLM) -> "GraphRag":
+    def build(self, documents: List[str]) -> "GraphRag":
         """
         Builds a knowledge graph from a list of documents by chunking, extracting triplets,
         summarizing entities and relationships, and constructing the graph.
 
         :param documents: List of textual documents to process.
-        :param client: API client for processing and summarization.
         :return: Instance of GraphRag with the built graph and community summaries.
         """
-        graph_builder = GraphBuilder(
-            client=client,
-        )
-        chunks = self.chunker(documents)
-        entities, relationships = self.triplet(chunks, client=client)
-        log_outputs(entities, 'entities')
-        log_outputs(relationships, 'relationships')
 
-        entities = EntitySummarizer.extract_summary(entities, client=client)
-        relationships = RelationSummarizer.extract_summary(relationships, client=client)
-        log_outputs(entities, 'summarized_entities')
-        log_outputs(relationships, 'summarized_relationships')
+        chunks = self.chunker(documents)
+        entities, relationships = self.triplet(chunks, client=self.client)
+        log_outputs(entities, "entities")
+        log_outputs(relationships, "relationships")
+
+        # TODO: move EntitySummarizer and RelationSummarizer to graph_builder
+        entities = EntitySummarizer.extract_summary(
+            entities,
+            client=self.client,
+            batch_size=self.graph_builder.batch_size
+        )
+        relationships = RelationSummarizer.extract_summary(
+            relationships,
+            client=self.client,
+            batch_size=self.graph_builder.batch_size
+        )
+        log_outputs(entities, "summarized_entities")
+        log_outputs(relationships, "summarized_relationships")
 
         nodes = get_nodes(entities)
         edges = get_edges(relationships, nodes)
 
-        self.graph, self.community_summary = graph_builder(edges)
+        self.graph, self.community_summary = self.graph_builder(edges)
 
         return self
 
