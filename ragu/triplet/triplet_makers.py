@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 import ragu.common.settings
 from ragu.common.llm import BaseLLM
+from ragu.common.decorator import no_throw
 from ragu.triplet.base_triplet import TripletExtractor
 
 
@@ -38,7 +39,6 @@ class TripletLLM(TripletExtractor):
                  - The second DataFrame contains extracted relationships with columns 'source_entity', 'target_entity', 'relationship_description', and 'chunk_id'.
         """
         from ragu.utils.default_prompts.triplet_maker_prompts import prompts
-        from ragu.utils.triplet_parser import parse_llm_response
 
         entities = []
         relations = []
@@ -49,7 +49,12 @@ class TripletLLM(TripletExtractor):
             if self.validate:
                 raw_data = self.validate_triplets(text, raw_data, client)
 
-            current_chunk_entities, current_chunk_relations = parse_llm_response(raw_data)
+            parsed_data = self._parse_llm_response(raw_data)
+
+            if parsed_data is None:
+                continue
+            else:
+                current_chunk_entities, current_chunk_relations = parsed_data
 
             # Add chunk ID to track the source of each entity and relationship
             current_chunk_entities['chunk_id'] = i
@@ -63,6 +68,7 @@ class TripletLLM(TripletExtractor):
 
         return entities, relations
 
+    @no_throw
     def validate_triplets(self, text: str, raw_triplets: str, client: BaseLLM):
         """
         Validate the triplets extracted from the text using the LLM.
@@ -76,6 +82,52 @@ class TripletLLM(TripletExtractor):
         prompt = "Текст:\n" + text + "\n\nТриплеты:\n" + raw_triplets
         validation_triplet_system_prompts = validation_prompts[self.entity_list_type]
         return client.generate(prompt, validation_triplet_system_prompts)
+
+
+    @no_throw
+    def _parse_llm_response(self, raw_data: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Parses the raw LLM response to extract entities and relationships.
+
+        :param raw_data: Raw response from the LLM.
+        :return: A tuple containing two DataFrames:
+                 - The first DataFrame contains extracted entities with columns 'entity_name', 'entity_type', and 'chunk_id'.
+                 - The second DataFrame contains extracted relationships with columns 'source_entity', 'target_entity', 'relationship_description', and 'chunk_id'.
+        """
+        import re
+
+        sections = re.split(r'<\|\|>', raw_data)
+
+        entities_section = sections[1].strip()
+        relationships_section = sections[2].strip()
+
+        entities = []
+        relationships = []
+
+        entity_lines = entities_section.split('\n')
+        for line in entity_lines:
+            match = re.match(r'(.+?) <\|> (.+?) <\|> (.+)', line)
+            if match:
+                entity_name, entity_type, entity_description = match.groups()
+                entities.append({
+                    "entity_name": entity_name.strip(),
+                    "entity_type": entity_type.strip(),
+                    "entity_description": entity_description.strip()
+                })
+
+        relationship_lines = relationships_section.split('\n')
+        for line in relationship_lines:
+            match = re.match(r'(.+?) <\|> (.+?) <\|> (.+?) <\|> (\d+)', line)
+            if match:
+                source_entity, target_entity, relationship_description, relationship_strength = match.groups()
+                relationships.append({
+                    "source_entity": source_entity.strip(),
+                    "target_entity": target_entity.strip(),
+                    "relationship_description": relationship_description.strip(),
+                    "relationship_strength": int(relationship_strength.strip())
+                })
+
+        return pd.DataFrame(entities), pd.DataFrame(relationships)
 
 
 # TODO: add relation extraction and definition generation
