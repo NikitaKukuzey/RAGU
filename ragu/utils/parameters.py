@@ -4,7 +4,8 @@ from ragu.common.parameters import (
     ChunkerParameters,
     TripletExtractorParameters,
     RerankerParameters,
-    GeneratorParameters
+    GeneratorParameters,
+    GraphParameters,
 )
 
 PARAMETER_CLASSES = {
@@ -12,6 +13,7 @@ PARAMETER_CLASSES = {
     "triplet": TripletExtractorParameters,
     "reranker": RerankerParameters,
     "generator": GeneratorParameters,
+    "graph": GraphParameters,
 }
 
 
@@ -36,4 +38,5 @@ def get_parameters(path_to_yaml: str):
         parsed_params["triplet"],
         parsed_params["reranker"],
         parsed_params["generator"],
+        parsed_params["graph"],
     )

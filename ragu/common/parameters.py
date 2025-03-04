@@ -21,6 +21,10 @@ class GeneratorParameters(BaseParameters):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+class GraphParameters(BaseParameters):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
 
 
 

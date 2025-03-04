@@ -6,18 +6,21 @@ chunker:
 triplet:
   class_name: 'original'
   validate: False
-  entity_list_type: 'nerel' # Can be default of nerel
+  entity_list_type: 'default' # Can be default of nerel
+  batch_size: 128
 
 generator:
   class_name: 'original_generator'
+  batch_size: 128
 
 reranker:
   class_name: 'cross_encoder_reranker'
   model_name: 'BAAI/bge-reranker-v2-m3'
-  top_k: 5
+  top_k: 20
 
 graph:
-  class_name: 'original'
+  batch_size: 128
+  which_level: 0
 
 
 

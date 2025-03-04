@@ -53,16 +53,18 @@ client = RemoteLLM(LLM_MODEL_NAME, LLM_BASE_URL, LLM_API_KEY)
 def main():
     text = read_text_from_files('path/to/folder')
 
-    chunker_params, triplet_params, reranker_params, generator_params = (
+    chunker_params, triplet_params, reranker_params, generator_params, graph_params = (
         get_parameters('configs/default_config.yaml')
     )
-
+    
     graph_rag = GraphRag(
+        client,
         chunker_params,
         triplet_params,
         reranker_params,
-        generator_params
-    ).build(text, client)
+        generator_params,
+        graph_params,
+    ).build(text).save_community_summary('summary.json').save_graph('graph.gml')
 
     questions = [
         "Как звали последнего Императора России?",
@@ -79,12 +81,8 @@ if __name__ == "__main__":
 
 ## Configuration
 
-RAGu uses Hydra for configuration management. The default configuration file is located at `configs/default.yaml`. You can customize the configuration by modifying this file or by passing additional configuration files.
+The default configuration file is located at `configs/default_config.yaml`. You can customize the configuration by modifying this file or by passing additional configuration files.
 
-## TODO
-
-1. Add new chunkers.
-2. Provide some experiments on new reranker
 
 ## Contributing
 

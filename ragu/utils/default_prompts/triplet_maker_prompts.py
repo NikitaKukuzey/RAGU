@@ -31,10 +31,45 @@ def generate_prompt(entity_list):
 ОТНОШЕНИЯ:
 список выделенных отношений
 <||>
+
 Текст:
 """
 
-default_entities = ["ОРГАНИЗАЦИЯ", "ПЕРСОНА", "МЕСТОПОЛОЖЕНИЕ"]
+def _generate_validation_prompt(entity_list):
+    entity_types = ", ".join(entity_list)
+    return f"""
+**-Цель-**  
+Ты - помощник, который проверяет правильность введенных сущностей и отношений.  
+Тебе на вход подается список сущностей, список отношений и текст, где они были выделены.  
+Твоя задача - проверить, все ли сущности были выделены из текста и имеют правильный тип и описание и вернуть полный список всех сущностей и отношений.  
+
+**-Шаги-**  
+1. **Проверка сущностей.**  
+   - Если сущность была пропущена, добавь её в список сущностей с описанием и её типом.  
+   - **Список допустимых типов сущностей:** [{entity_types}].  
+   - Верни список всех сущностей: и ранее выделенных, и тех, что были пропущены.
+   - Формат вывода:  
+     `entity_name <|> entity_type <|> entity_description`  
+
+2. **Проверка отношений.**  
+   - Если отношение было пропущено, добавь его в список отношений с описанием и силой связи.  
+   - Верни список всех отношений: и ранее выделенных, и тех, что были пропущены.
+   - Формат вывода:  
+     `source_entity <|> target_entity <|> relationship_description <|> relationship_strength`  
+
+3. **Вывести результат на русском языке** строго в следующем виде:  
+<||>  
+**СУЩНОСТИ:**  
+полный список выделенных сущностей  
+<||>  
+**ОТНОШЕНИЯ:**  
+полный список выделенных отношений  
+<||>  
+
+**Текст:**  
+"""
+
+default_entities = ["ОРГАНИЗАЦИЯ", "ПЕРСОНА", "МЕСТОПОЛОЖЕНИЕ", "СОБЫТИЕ"]
 nerel_entities = [
     "ВОЗРАСТ",
     "СЕМЬЯ",
@@ -65,7 +100,58 @@ nerel_entities = [
     'ОБЪЕКТ',
     'ОРГАНИЗАЦИЯ']
 
+english_default_entities = [
+    "ORGANIZATION",
+    "PERSON",
+    "LOCATION",
+    "EVENT"
+]
+
+english_nerel_entities = [
+    "AGE",
+    "FAMILY",
+    "AWARD",
+    'IDEOLOGY',
+    'PERCENT',
+    'CITY',
+    'LANGUAGE',
+    'PERSON',
+    'COUNTRY',
+    'LAW',
+    'PRODUCT',
+    'CRIME',
+    'PENALTY',
+    'PROFESSION',
+    'DATE',
+    'MONEY',
+    'RELIGION',
+    'DISEASE',
+    'NATIONALITY',
+    'STATE_OR_PROV',
+    'ORDINAL',
+    'TIME',
+    'EVENT',
+    'DISTRICT',
+    'WORK_OF_ART',
+    'ORGANIZATION',
+    'FACILITY',
+    'NUMBER',
+    'LOCATION',
+]
+
+
+# PROMPTS
 prompts = {
     'default':  generate_prompt(default_entities),
     'nerel': generate_prompt(nerel_entities)
+}
+
+validation_prompts = {
+    'default': _generate_validation_prompt(default_entities),
+    'nerel': _generate_validation_prompt(nerel_entities)
+}
+
+english_entities_dict = {
+    'default': english_default_entities,
+    'nerel': english_nerel_entities,
 }
