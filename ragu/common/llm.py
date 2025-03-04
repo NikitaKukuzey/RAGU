@@ -1,6 +1,7 @@
+import importlib.util
+
 import torch
 from openai import OpenAI
-from vllm import LLM, SamplingParams
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 from ragu.common.decorator import no_throw
@@ -161,13 +162,19 @@ class VLLMClient(BaseLLM):
         """
         super().__init__()
 
-        self.engine = LLM(
+        spec = importlib.util.find_spec("vllm")
+        if spec is not None:
+            vllm = importlib.import_module("vllm")
+        else:
+            raise ImportError("vLLM is not installed. Please install it using pip install vllm or compile from source.")
+
+        self.engine = vllm.LLM(
             model=model_name,
             tensor_parallel_size=tensor_parallel_size,
             torch_dtype=torch_dtype,
         )
 
-        self.sampling_params = SamplingParams(**(sampling_params or {"max_tokens": 2048}))
+        self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048}))
 
     def generate(self, queries: str | list[str], system_prompt: str, **kwargs):
         """
