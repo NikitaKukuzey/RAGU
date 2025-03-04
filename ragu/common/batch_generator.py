@@ -1,36 +1,39 @@
-from typing import Iterator, List
+import math
+from typing import List, Generator
 
 
-def generate_prompt_batches(
-    system_prompt: str,
-    input_texts: List[str],
-    batch_size: int,
-    template: str = "{system}\n{input}"
-) -> Iterator[List[str]]:
+class BatchGenerator:
     """
-    Generate batches of prompts by combining a system prompt with individual input texts.
+    A utility class for generating batches of data.
 
-    :param system_prompt: A single system prompt that will be combined with each input text.
-    :param input_texts: A list of input texts to be processed in batches.
-    :param batch_size: The number of input texts to include in each batch.
-    :param template: A template string that defines how the system prompt and input text are combined.
-                     Defaults to "{system}\n{input}".
-
-    :return: An iterator that yields lists of formatted prompts, where each list represents a batch.
-
-    Example:
-        >>> system_prompt = "You are a helpful assistant."
-        >>> input_texts = ["What is AI?", "Explain quantum computing."]
-        >>> for batch in generate_prompt_batches(system_prompt, input_texts, batch_size=1):
-        ...     print(batch)
-        ['You are a helpful assistant.\nWhat is AI?']
-        ['You are a helpful assistant.\nExplain quantum computing.']
+    Attributes:
+        data (List[str]): The dataset to be batched.
+        batch_size (int): The size of each batch.
     """
-    for i in range(0, len(input_texts), batch_size):
-        batch_inputs = input_texts[i:i + batch_size]
-        batch_prompts = [
-            template.format(system=system_prompt, input=input_text)
-            for input_text in batch_inputs
-        ]
 
-        yield batch_prompts
+    def __init__(self, data: List[str], batch_size: int):
+        """
+        Initializes the BatchGenerator.
+
+        :param data: A list of strings representing the dataset.
+        :param batch_size: The number of elements in each batch.
+        """
+        self.data = data
+        self.batch_size = batch_size
+
+    def get_batches(self) -> Generator:
+        """
+        Generates batches from the dataset.
+
+        :return: A generator that yields batches of data.
+        """
+        for i in range(0, len(self.data), self.batch_size):
+            yield self.data[i : i + self.batch_size]
+
+    def __len__(self) -> int:
+        """
+        Returns the number of batches.
+
+        :return: The total number of batches.
+        """
+        return math.ceil(len(self.data) / self.batch_size)
