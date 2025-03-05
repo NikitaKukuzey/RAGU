@@ -176,6 +176,7 @@ class VLLMClient(BaseLLM):
 
         self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048}))
 
+    @no_throw
     def generate(self, queries: str | list[str], system_prompt: str, **kwargs):
         """
         Generates responses from the vLLM model based on user queries.
@@ -204,4 +205,4 @@ class VLLMClient(BaseLLM):
             ...
 
         return responses[0] if len(responses) == 1 else responses
-#
+
