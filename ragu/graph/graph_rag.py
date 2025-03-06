@@ -41,12 +41,12 @@ class GraphRag:
 
     def __init__(
             self,
-            client: BaseLLM,
-            chunker_parameters: ChunkerParameters,
-            triplet_extractor_parameters: TripletExtractorParameters,
-            reranker_parameters: RerankerParameters,
-            generator_parameters: GeneratorParameters,
-            graph_builder_parameters: GraphParameters,
+            client: Optional[BaseLLM] = None,
+            chunker_parameters: Optional[ChunkerParameters] = None,
+            triplet_extractor_parameters: Optional[TripletExtractorParameters] = None,
+            reranker_parameters: Optional[RerankerParameters] = None,
+            generator_parameters: Optional[GeneratorParameters] = None,
+            graph_builder_parameters: Optional[GraphParameters] = None,
     ) -> None:
         """
         Initializes the GraphRag pipeline with configured components for chunking, triplet extraction,
@@ -59,14 +59,15 @@ class GraphRag:
         """
         self.client = client
 
-        self.chunker = Chunker.get(**chunker_parameters)
-        self.triplet = TripletExtractor.get(**triplet_extractor_parameters)
-        self.reranker = Reranker.get(**reranker_parameters)
-        self.generator = Generator.get(**generator_parameters)
-        self.graph_builder = GraphBuilder(client=client, **graph_builder_parameters)
+        self.chunker = Chunker.get(**chunker_parameters) if chunker_parameters else None
+        self.triplet = TripletExtractor.get(**triplet_extractor_parameters) if triplet_extractor_parameters else None
+        self.reranker = Reranker.get(**reranker_parameters) if reranker_parameters else None
+        self.generator = Generator.get(**generator_parameters) if generator_parameters else None
+        self.graph_builder = GraphBuilder(client=client, **graph_builder_parameters) if graph_builder_parameters else None
 
         self.graph = None
         self.community_summary: Optional[dict] = None
+
 
     def build(self, documents: List[str]) -> "GraphRag":
         """
@@ -76,6 +77,8 @@ class GraphRag:
         :param documents: List of textual documents to process.
         :return: Instance of GraphRag with the built graph and community summaries.
         """
+        if self.chunker is None or self.triplet is None or self.reranker is None or self.generator is None:
+            raise ValueError("Please provide all required components for building the graph.")
 
         chunks = self.chunker(documents)
         entities, relationships = self.triplet(chunks, client=self.client)
