@@ -1,9 +1,6 @@
 import importlib.util
 
-import torch
 from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-
 from ragu.common.decorator import no_throw
 
 
@@ -31,17 +28,24 @@ class BaseLLM:
 
 class LocalLLM(BaseLLM):
     def __init__(self, model_name: str, *args, **kwargs):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        spec = importlib.util.find_spec("transformers")
+        if spec is not None:
+            transformers = importlib.import_module("transformers")
+        else:
+            raise ImportError("transformers is not installed. Please install it using pip install transformers or compile from source.")
 
+        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16,
-            attn_implementation="flash_attention_2",
-            device_map="auto"
+            **kwargs,
         )
-
         self.pipe = pipeline(
-            "text-generation", model=self.model, tokenizer=self.tokenizer)
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer
+        )
         super().__init__()
 
     def generate(self, query: str, system_prompt: str, *args, **kwargs):
@@ -149,16 +153,13 @@ class VLLMClient(BaseLLM):
         self,
         model_name: str,
         sampling_params: dict = None,
-        tensor_parallel_size: int = 4,
-        torch_dtype=torch.float16,
+        **vllm_kwargs,
     ):
         """
         Initializes the vLLM client.
 
         :param model_name: Name of the LLM model.
         :param sampling_params: Dictionary of sampling parameters (default: max_tokens=2048).
-        :param tensor_parallel_size: Number of parallel tensors for model inference.
-        :param torch_dtype: Data type for PyTorch tensors.
         """
         super().__init__()
 
@@ -170,8 +171,7 @@ class VLLMClient(BaseLLM):
 
         self.engine = vllm.LLM(
             model=model_name,
-            tensor_parallel_size=tensor_parallel_size,
-            torch_dtype=torch_dtype,
+            **vllm_kwargs,
         )
 
         self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048}))

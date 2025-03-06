@@ -20,7 +20,7 @@ class Chunker(ABC, Registrable):
         self.config = config
     
     @abstractmethod
-    def get_chunks(self, documents: List[str]) -> List[Chunk]:
+    def get_chunks(self, documents: str | List[str]) -> List[Chunk]:
         """
         Abstract method for splitting documents into smaller chunks.
         Must be implemented in subclasses.
@@ -30,7 +30,7 @@ class Chunker(ABC, Registrable):
         """
         pass
 
-    def __call__(self, documents: List[str]) -> List[Chunk]:
+    def __call__(self, documents: str | List[str]) -> List[Chunk]:
         """
         Calls the chunker on a given list of documents.
 

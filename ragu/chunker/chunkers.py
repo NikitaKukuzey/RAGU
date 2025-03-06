@@ -27,13 +27,16 @@ class SimpleChunker(Chunker):
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
-    def get_chunks(self, documents: List[str]) -> List[Chunk]:
+    def get_chunks(self, documents: str | List[str]) -> List[Chunk]:
         """
         Splits documents into fixed-size overlapping chunks.
 
         :param documents: List of input documents.
         :return: List of text chunks.
         """
+
+        if isinstance(documents, str):
+            documents = [documents]
 
         chunks: list[Chunk] = []
         for document in documents:
@@ -149,13 +152,16 @@ class SemanticTextChunker(Chunker):
             )
         )
 
-    def get_chunks(self, documents: List[str]) -> List[Chunk]:
+    def get_chunks(self, documents: str | List[str]) -> List[Chunk]:
         """
         Splits text into semantically coherent chunks.
 
         :param documents: List of input documents.
         :return: List of semantically split text chunks.
         """
+        if isinstance(documents, str):
+            documents = [documents]
+        
         all_chunks = []
         for document in tqdm(documents, desc="Index creation: splitting documents"):
             sentences = self.split_text_by_chunks(document)
