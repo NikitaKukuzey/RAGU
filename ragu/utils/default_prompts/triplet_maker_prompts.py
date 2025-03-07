@@ -1,6 +1,4 @@
-def generate_prompt(entity_list):
-    entity_types = ", ".join(entity_list)
-    return f"""
+prompt = """
 **-Цель-**  
 Дан текстовый документ и список типов сущностей. Необходимо выявить все сущности указанных типов в тексте, а также все связи между найденными сущностями.  
 
@@ -10,10 +8,8 @@ def generate_prompt(entity_list):
    - **entity_name**: Нормализованное название сущности с заглавной буквы. 
     Под нормализацией подразумевается приведение слова к начальной форме. 
     Пример: рождеству -> Рождество, кошек -> Кошки, Павла -> Павел.
-   - **entity_type**: Тип сущности. Допустимые типы: [{entity_types}]  
+   - **entity_type**: Тип сущности. Допустимые типы: {allowed_entity_types}
    - **entity_description**: Подробное описание характеристик и деятельности сущности  
-   Отформатировать каждую сущность в виде:  
-   `entity_name <|> entity_type <|> entity_description`  
 
 2. **Определение связей между сущностями.**  
    На основе сущностей, найденных на первом шаге, определить все пары (**source_entity**, **target_entity**), которые *явно связаны* между собой.  
@@ -22,24 +18,30 @@ def generate_prompt(entity_list):
    - **target_entity**: Название целевой сущности (как определено в шаге 1)  
    - **relationship_description**: Описание связи между двумя сущностями. 
    - **relationship_strength**: Числовой показатель, отражающий силу связи между сущностями в диапазоне от 0 до 5, где 0 - слабая связь, 5 - сильная связь.
-   Отформатировать каждую связь в виде:  
-   `source_entity <|> target_entity <|> relationship_description <|> relationship_strength`  
 
 3. **Вывести результат на русском языке** строго в следующем виде:
-<||>
-СУЩНОСТИ:
-список выделенных сущностей
-<||>
-ОТНОШЕНИЯ:
-список выделенных отношений
-<||>
+{{
+    "entities": [
+        {{
+            "entity_name": "<название сущности>",
+            "entity_type": "<тип сущности>",
+            "entity_description": "<описание сущности>"
+        }}
+    ],
+    "relationships": [
+        {{
+            "source_entity": "<название исходной сущности>",
+            "target_entity": "<название целевой сущности>",
+            "relationship_description": "<описание связи>",
+            "relationship_strength": <число от 0 до 5>
+        }}
+    ]
+}}
 
 Текст:
 """
 
-def _generate_validation_prompt(entity_list):
-    entity_types = ", ".join(entity_list)
-    return f"""
+validation_prompt = """
 **-Цель-**  
 Ты - помощник, который проверяет правильность введенных сущностей и отношений.  
 Тебе на вход подается список сущностей, список отношений и текст, где они были выделены.  
@@ -48,28 +50,43 @@ def _generate_validation_prompt(entity_list):
 **-Шаги-**  
 1. **Проверка сущностей.**  
    - Если сущность была пропущена, добавь её в список сущностей с описанием и её типом.  
-   - **Список допустимых типов сущностей:** [{entity_types}].  
+   - **Список допустимых типов сущностей:** {allowed_entity_types}.  
    - Верни список всех сущностей: и ранее выделенных, и тех, что были пропущены.
-   - Формат вывода:  
-     `entity_name <|> entity_type <|> entity_description`  
 
 2. **Проверка отношений.**  
    - Если отношение было пропущено, добавь его в список отношений с описанием и силой связи.  
-   - Верни список всех отношений: и ранее выделенных, и тех, что были пропущены.
-   - Формат вывода:  
-     `source_entity <|> target_entity <|> relationship_description <|> relationship_strength`  
+   - Верни список всех отношений: и ранее выделенных, и тех, что были пропущены. 
 
-3. **Вывести результат на русском языке** строго в следующем виде:  
-<||>  
-**СУЩНОСТИ:**  
-полный список выделенных сущностей  
-<||>  
-**ОТНОШЕНИЯ:**  
-полный список выделенных отношений  
-<||>   
+3. **Вывести результат на русском языке** строго в следующем виде:
+{{
+    "entities": [
+        {{
+            "entity_name": "<название сущности>",
+            "entity_type": "<тип сущности>",
+            "entity_description": "<описание сущности>"
+        }}
+    ],
+    "relationships": [
+        {{
+            "source_entity": "<название исходной сущности>",
+            "target_entity": "<название целевой сущности>",
+            "relationship_description": "<описание связи>",
+            "relationship_strength": <число от 0 до 5>
+        }}
+    ]
+}}
 """
 
-default_entities = ["ОРГАНИЗАЦИЯ", "ПЕРСОНА", "МЕСТОПОЛОЖЕНИЕ", "СОБЫТИЕ"]
+def _generate_prompt(input_prompt, **kwargs):
+    return input_prompt.format(**kwargs)
+
+
+default_entities = [
+    "ОРГАНИЗАЦИЯ",
+    "ПЕРСОНА",
+    "МЕСТОПОЛОЖЕНИЕ",
+    "СОБЫТИЕ"
+]
 nerel_entities = [
     "ВОЗРАСТ",
     "СЕМЬЯ",
@@ -139,16 +156,15 @@ english_nerel_entities = [
     'LOCATION',
 ]
 
-
 # PROMPTS
 prompts = {
-    'default':  generate_prompt(default_entities),
-    'nerel': generate_prompt(nerel_entities)
+    'default':  _generate_prompt(prompt, allowed_entity_types=", ".join(default_entities)),
+    'nerel': _generate_prompt(prompt, allowed_entity_types=", ".join(nerel_entities))
 }
 
 validation_prompts = {
-    'default': _generate_validation_prompt(default_entities),
-    'nerel': _generate_validation_prompt(nerel_entities)
+    'default':  _generate_prompt(validation_prompt, allowed_entity_types=", ".join(default_entities)),
+    'nerel': _generate_prompt(validation_prompt, allowed_entity_types=", ".join(nerel_entities))
 }
 
 english_entities_dict = {
