@@ -1,3 +1,5 @@
+import json
+import logging
 from collections import defaultdict
 
 from networkx import Graph
@@ -13,7 +15,7 @@ from graspologic.partition import (
 from ragu.common.types import Relation, Community
 from ragu.common.llm import BaseLLM
 from ragu.common.batch_generator import BatchGenerator
-from ragu.utils.default_prompts.community_summary_prompt import prompt
+from ragu.utils.parse_json_output import extract_json
 
 
 def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
@@ -87,6 +89,26 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
 
     return dict(result)
 
+def _get_text_report( parsed_output: dict) -> str:
+    title = parsed_output.get("title", "Report")
+    summary = parsed_output.get("summary", "")
+    findings = parsed_output.get("findings", [])
+
+    def finding_summary(finding: dict):
+        if isinstance(finding, str):
+            return finding
+        return finding.get("summary")
+
+    def finding_explanation(finding: dict):
+        if isinstance(finding, str):
+            return ""
+        return finding.get("explanation")
+
+    report_sections = "\n\n".join(
+        f"## {finding_summary(f)}\n\n{finding_explanation(f)}" for f in findings
+    )
+    return f"# {title}\n\n{summary}\n\n{report_sections}"
+
 
 def get_community_summaries(communities: List[Community], client: BaseLLM, batch_size: int) -> List[str]:
     """
@@ -100,6 +122,7 @@ def get_community_summaries(communities: List[Community], client: BaseLLM, batch
     :param client: An API client for interacting with the LLM.
     :return: A list of summaries, one for each community.
     """
+
     def compose_community_string(
             entities: List[Tuple[Hashable, str]],
             relations: List[Tuple[Hashable, Hashable, str]]
@@ -119,11 +142,16 @@ def get_community_summaries(communities: List[Community], client: BaseLLM, batch
         )
         return f"{vertices_str}\n\nОтношения:\n{relations_str}"
 
+
+    from ragu.utils.default_prompts.community_summary_prompt import generate_community_report
+
     summaries = []
     batch_generator = BatchGenerator(communities, batch_size=batch_size)
     for batch in tqdm(batch_generator.get_batches(), desc="Index creation: community summary", total=len(batch_generator)):
         community_text = [compose_community_string(community.entities, community.relations) for community in batch]
-        summary = client.generate(community_text, prompt)
+        summary = client.generate(community_text, generate_community_report)
+
+        summary = [_get_text_report(extract_json(s)) for s in summary]
         summaries.extend(summary)
 
     return summaries

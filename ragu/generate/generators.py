@@ -1,10 +1,15 @@
-import re
+import json
 from tqdm import tqdm
 
 from ragu import Generator
 from ragu.common.batch_generator import BatchGenerator
 from ragu.common.llm import BaseLLM
 from ragu.common.logger import logging
+from ragu.utils.parse_json_output import extract_json
+from ragu.utils.default_prompts.generation_prompt import (
+    generation_rating_prompt,
+    generation_final_answer_prompt
+)
 
 
 @Generator.register("original_generator")
@@ -24,51 +29,98 @@ class OriginalGenerator(Generator):
         super().__init__()
         self.batch_size = batch_size
 
-    def generate_final_answer(self, query, community_summaries, client: BaseLLM, *args, **kwargs):
+    def generate_final_answer(
+            self,
+            query: str,
+            community_summaries: list[str],
+            client: BaseLLM,
+            *args,
+            **kwargs
+    ) -> str:
         """
-        Generates a final answer by obtaining intermediate answers from the model, 
-        filtering and sorting them based on a rating, 
-        and using the sorted answers to generate the final response.
+        Generates a final answer using intermediate responses filtered and ranked based on relevance.
 
-        :param query: The query to generate a final answer for.
-        :param community_summaries: The community summaries to be processed.
-        :param client: The client responsible for making API requests to the model.
-        :return: The final answer generated after processing intermediate answers.
+        :param query: The input query.
+        :param community_summaries: Summaries used for context.
+        :param client: LLM client for generating responses.
+        :return: The final generated answer.
         """
-        from ragu.utils.default_prompts.generation_prompt import (
-            generation_rating_prompt,
-            generation_final_answer_prompt
-        )
         batch_generator = BatchGenerator(community_summaries, batch_size=self.batch_size)
+        raw_intermediate_answers = self._generate_intermediate_answers(query, batch_generator, client)
+        intermediate_answers = self._process_intermediate_answers(raw_intermediate_answers)
+        final_answer = self._generate_final_response(intermediate_answers, client)
 
-        intermediate_answers = []
+        return final_answer
+
+    def _generate_intermediate_answers(self, query: str, batch_generator: BatchGenerator, client: BaseLLM) -> list[str]:
+        """
+        Generates intermediate answers for each batch of community summaries.
+
+        :param query: The input query.
+        :param batch_generator: BatchGenerator instance to iterate over batches.
+        :param client: LLM client for generating responses.
+        :return: List of raw intermediate answers.
+        """
+        raw_intermediate_answers = []
         for batch in tqdm(
                 batch_generator.get_batches(),
-                desc="Inference: getting global answers.",
+                desc="Inference: generating intermediate answers",
                 total=len(batch_generator)
         ):
-            texts = [f"Query: {query} Summary: {summary}" for summary in batch]
-            answers = client.generate(texts, generation_rating_prompt)
+            context_text = self._format_context(batch)
+            prompt_text = f"Запрос: {query}\n\nКонтекст:\n{context_text}\n\n"
+            raw_answers = client.generate(prompt_text, generation_rating_prompt)
+            raw_intermediate_answers.extend(self._ensure_list(raw_answers))
 
-            for answer in answers:
-                answer_parts = str(answer).split('<|>')
+        return raw_intermediate_answers
 
-                if len(answer_parts) != 2:
-                    continue
+    def _format_context(self, batch: list[str]) -> str:
+        """
+        Formats the context text for a given batch of summaries.
 
-                digits_only = re.sub(r'\D', '', answer_parts[0])
-                if digits_only == "" or digits_only is None:
-                    logging.error(f"Rating is not a number. Text: {answer}")
+        :param batch: List of summaries in the current batch.
+        :return: Formatted context text.
+        """
+        return "\n".join(f"{i + 1}. {summary}" for i, summary in enumerate(batch))
 
-                rating = int(digits_only) if digits_only else 3
-                response = answer_parts[1]
+    def _ensure_list(self, raw_answers: str | list[str]) -> list[str]:
+        """
+        Ensures the raw answers are always returned as a list.
 
-                if rating < 3:
-                    continue
+        :param raw_answers: Raw answers from the LLM client.
+        :return: List of raw answers.
+        """
+        return [raw_answers] if isinstance(raw_answers, str) else raw_answers
 
-                intermediate_answers.append((rating, response))
+    def _process_intermediate_answers(self, raw_intermediate_answers: list[str]) -> list[dict]:
+        """
+        Processes raw intermediate answers by extracting JSON, filtering, and sorting.
 
-        intermediate_answers = sorted(intermediate_answers, key=lambda x: x[0], reverse=True)
-        text = f"Intermediate answers: {intermediate_answers}"
-        final_answer = client.generate(text, generation_final_answer_prompt)
-        return final_answer
+        :param raw_intermediate_answers: List of raw intermediate answers.
+        :return: List of processed intermediate answers.
+        """
+        intermediate_answers = []
+        for answer in raw_intermediate_answers:
+            intermediate_answers.extend(extract_json(answer)["points"])
+
+        # Filter and sort intermediate answers by score
+        intermediate_answers = [
+            ans for ans in intermediate_answers if ans.get("score", 0) > 0
+        ]
+        intermediate_answers.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+        return intermediate_answers
+
+    def _generate_final_response(self, intermediate_answers: list[dict], client: BaseLLM) -> str:
+        """
+        Generates the final response using the processed intermediate answers.
+
+        :param intermediate_answers: list of processed intermediate answers.
+        :param client: LLM client for generating responses.
+        :return: Final generated answer.
+        """
+        formatted_answers = "\n".join(
+            f"Ответ: {ans['description']}, Оценка: {ans['score']}" for ans in intermediate_answers
+        )
+        final_prompt = f"Промежуточные ответы:\n{formatted_answers}"
+        return client.generate(final_prompt, generation_final_answer_prompt)
