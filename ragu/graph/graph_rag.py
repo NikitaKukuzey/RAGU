@@ -1,10 +1,9 @@
 import json
 import logging
+import pickle
 
 import networkx as nx
 from typing import List, Optional, Any
-
-import pandas as pd
 
 from ragu import (
     Chunker,
@@ -67,7 +66,8 @@ class GraphRag:
 
         self.graph = None
         self.community_summary: Optional[dict] = None
-
+        self.community_summary_index = None
+        self.bm_25_index = None
 
     def build(self, documents: List[str]) -> "GraphRag":
         """
@@ -103,6 +103,7 @@ class GraphRag:
         edges = get_edges(relationships, nodes)
 
         self.graph, self.community_summary = self.graph_builder(edges)
+        self.community_summary_index, self.bm_25_index = self.graph_builder.build_index(self.community_summary)
 
         return self
 
@@ -177,6 +178,21 @@ class GraphRag:
 
         return self
 
+    def save_index(self, path: str) -> "GraphRag":
+        with open(path, "wb") as f:
+            pickle.dump({
+                "community_summary_index": self.community_summary_index,
+                "bm25_index": self.bm_25_index
+            }, f)
+        return self
+
+    def load_index(self, path: str) -> "GraphRag":
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        self.community_summary_index = data["community_summary_index"]
+        self.bm_25_index = data["bm25_index"]
+        return self
+
     def get_response(self, query: str, client: Any, which_level: int = 0) -> Any:
         """
         Retrieves relevant information from the knowledge graph in response to a query
@@ -190,15 +206,20 @@ class GraphRag:
         if self.community_summary is None:
             raise RuntimeError("Graph is not built. Please build or load the graph first.")
 
-
         community_summary = self.community_summary.get(which_level, None)
         if community_summary is None:
             logging.log(logging.ERROR, f"No summary available for the specified level: {which_level}. Get 0 level summary instead.")
             community_summary = self.community_summary.get(0)
 
-        # Use the reranker to retrieve relevant chunks from the community summary
-        relevant_chunks = self.reranker(query, community_summary)
-        return self.generator(query, relevant_chunks, client)
+        # Use the reranker to retrieve relevant chunks summary the community summaries
+        relevant_summaries = self.reranker(
+            query,
+            community_summary,
+            summary_index=self.community_summary_index,
+            bm25=self.bm_25_index,
+            embedder=self.graph_builder.embedder_model
+        )
+        return self.generator(query, relevant_summaries, client)
 
     def visualize(self) -> "GraphRag":
         """
