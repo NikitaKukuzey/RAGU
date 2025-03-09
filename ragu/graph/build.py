@@ -1,8 +1,7 @@
-import json
-import logging
 from collections import defaultdict
 
-from networkx import Graph
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 from typing import List, Tuple, Any, Hashable, Dict, Set
 
@@ -15,7 +14,7 @@ from graspologic.partition import (
 from ragu.common.types import Relation, Community
 from ragu.common.llm import BaseLLM
 from ragu.common.batch_generator import BatchGenerator
-from ragu.utils.parse_json_output import extract_json
+from ragu.utils.parse_json_output import extract_json, combine_report_text
 
 
 def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
@@ -89,43 +88,23 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
 
     return dict(result)
 
-def _get_text_report( parsed_output: dict) -> str:
-    title = parsed_output.get("title", "Report")
-    summary = parsed_output.get("summary", "")
-    findings = parsed_output.get("findings", [])
 
-    def finding_summary(finding: dict):
-        if isinstance(finding, str):
-            return finding
-        return finding.get("summary")
-
-    def finding_explanation(finding: dict):
-        if isinstance(finding, str):
-            return ""
-        return finding.get("explanation")
-
-    report_sections = "\n\n".join(
-        f"## {finding_summary(f)}\n\n{finding_explanation(f)}" for f in findings
-    )
-    return f"# {title}\n\n{summary}\n\n{report_sections}"
-
-
-def get_community_summaries(communities: List[Community], client: BaseLLM, batch_size: int) -> List[str]:
+def get_community_summaries(communities: List[Community], client: BaseLLM, batch_size: int) -> List[dict]:
     """
     Generate summaries for each community using a language model (LLM).
 
     This function composes a textual representation of each community (including its entities
     and relations) and uses the LLM client to generate a summary.
 
-    :param batch_size:
     :param communities: A list of Community objects to summarize.
     :param client: An API client for interacting with the LLM.
+    :param batch_size: The batch size for processing summaries.
     :return: A list of summaries, one for each community.
     """
 
     def compose_community_string(
-            entities: List[Tuple[Hashable, str]],
-            relations: List[Tuple[Hashable, Hashable, str]]
+        entities: List[Tuple[Hashable, str]],
+        relations: List[Tuple[Hashable, Hashable, str]]
     ) -> str:
         """
         Compose a textual representation of a community.
@@ -150,10 +129,8 @@ def get_community_summaries(communities: List[Community], client: BaseLLM, batch
     for batch in tqdm(batch_generator.get_batches(), desc="Index creation: community summary", total=len(batch_generator)):
         community_text = [compose_community_string(community.entities, community.relations) for community in batch]
         summary = client.generate(community_text, generate_community_report)
-
-        summary = [_get_text_report(extract_json(s)) for s in summary]
+        summary = [(extract_json(s)) for s in summary]
         summaries.extend(summary)
-
     return summaries
 
 
@@ -167,18 +144,36 @@ class GraphBuilder:
     3. Generate summaries for each community using a language model.
     """
 
-    def __init__(self, client: Any, batch_size: int=16, which_level: int = -1) -> None:
+    def __init__(
+            self,
+            client: Any,
+            batch_size: int=16,
+            which_level: int = -1,
+            embedder_model_name: str=None,
+            enable_index: bool = True,
+            **kwargs
+    ) -> None:
         """
         Initialize the GraphBuilder.
 
         :param client: An API client for community summarization.
-        :param which_level: The hierarchy level to analyze. Use -1 to analyze all levels.
+        :param batch_size: Batch size for LLM processing.
+        :param which_level: The hierarchy level to analyze (-1 for all levels).
+        :param embedder_model_name: Name of the embedding model.
+        :param enable_index: Whether to build an index for retrieval.
         """
         self.client = client
         self.batch_size = batch_size
         self.which_level = which_level
+        self.enable_index = enable_index
 
-    def __call__(self, relations: List[Relation]) -> tuple[Graph, dict[int, list[str]]]:
+        if embedder_model_name:
+            self.embedder_model = SentenceTransformer(
+                embedder_model_name,
+                **kwargs
+            )
+
+    def __call__(self, relations: List[Relation]):
         """
         Execute the graph processing pipeline.
 
@@ -208,6 +203,11 @@ class GraphBuilder:
             community_summaries[level] = community_summaries_at_level
 
         return graph, community_summaries
+
+    def build_index(self, summaries: dict):
+        if self.embedder_model and self.enable_index:
+            docs = [combine_report_text(report) for report in summaries.get(self.which_level, [])]
+            return self.embedder_model.encode(docs), BM25Okapi([doc.split() for doc in docs])
 
     def build_graph(self, relations: List[Relation]) -> nx.Graph:
         """
