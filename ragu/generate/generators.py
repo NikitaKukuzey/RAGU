@@ -48,7 +48,7 @@ class OriginalGenerator(Generator):
         batch_generator = BatchGenerator(community_summaries, batch_size=self.batch_size)
         raw_intermediate_answers = self._generate_intermediate_answers(query, batch_generator, client)
         intermediate_answers = self._process_intermediate_answers(raw_intermediate_answers)
-        final_answer = self._generate_final_response(intermediate_answers, client)
+        final_answer = self._generate_final_response(query, intermediate_answers, client)
 
         return final_answer
 
@@ -108,10 +108,9 @@ class OriginalGenerator(Generator):
             ans for ans in intermediate_answers if ans.get("score", 0) > 0
         ]
         intermediate_answers.sort(key=lambda x: x.get("score", 0), reverse=True)
-
         return intermediate_answers
 
-    def _generate_final_response(self, intermediate_answers: list[dict], client: BaseLLM) -> str:
+    def _generate_final_response(self, query: str, intermediate_answers: list[dict], client: BaseLLM) -> str:
         """
         Generates the final response using the processed intermediate answers.
 
@@ -120,7 +119,7 @@ class OriginalGenerator(Generator):
         :return: Final generated answer.
         """
         formatted_answers = "\n".join(
-            f"Ответ: {ans['description']}, Оценка: {ans['score']}" for ans in intermediate_answers
+            f"Ответ: {ans['description']}" for ans in intermediate_answers
         )
-        final_prompt = f"Промежуточные ответы:\n{formatted_answers}"
-        return client.generate(final_prompt, generation_final_answer_prompt)
+        context = f"Вопрос:{query}\n\nПромежуточные ответы:\n{formatted_answers}"
+        return client.generate(context, generation_final_answer_prompt)
