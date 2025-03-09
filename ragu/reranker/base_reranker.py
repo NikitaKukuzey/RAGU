@@ -19,7 +19,7 @@ class Reranker(ABC, Registrable):
         self.config = config
 
     @abstractmethod
-    def get_relevant_chunks(self, query: str, documents: List[str]) -> List[str]:
+    def get_relevant_chunks(self, query: str, documents: List[str], **kwargs) -> List[str]:
         """
         Abstract method for retrieving relevant document chunks for a given query.
         Must be implemented in subclasses.
@@ -30,7 +30,7 @@ class Reranker(ABC, Registrable):
         """
         pass
 
-    def __call__(self, query: str, documents: List[str]) -> List[str]:
+    def __call__(self, query: str, documents: List[str], **kwargs) -> List[str]:
         """
         Calls the reranker on a given query and list of documents.
 
@@ -38,4 +38,4 @@ class Reranker(ABC, Registrable):
         :param documents: List of candidate documents.
         :return: A ranked list of relevant documents.
         """
-        return self.get_relevant_chunks(query, documents)
+        return self.get_relevant_chunks(query, documents, **kwargs)
