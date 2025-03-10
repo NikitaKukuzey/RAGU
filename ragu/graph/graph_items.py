@@ -1,5 +1,3 @@
-from itertools import batched
-
 import pandas as pd
 from tqdm import tqdm
 from typing import Any, List, Dict
