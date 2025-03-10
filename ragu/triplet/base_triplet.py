@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, Tuple
+from typing import  List, Optional, Dict, Any, Tuple
 
 import pandas as pd
 
@@ -22,23 +22,21 @@ class TripletExtractor(ABC, Registrable):
         self.config = config
 
     @abstractmethod
-    def extract_entities_and_relationships(self, text: List[str], client: BaseLLM) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def extract_entities_and_relationships(self, text: List[str], **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Abstract method for extracting entities and relationships from a given text.
         Must be implemented in subclasses.
 
         :param text: The input text to process.
-        :param client: External client for processing, if required.
         :return: A list of extracted triplets.
         """
         pass
 
-    def __call__(self, elements: List[str], client: BaseLLM) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def __call__(self, text: List[str], **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Processes a list of textual elements and extracts entities and relationships from each.
 
-        :param elements: List of input text elements.
-        :param client: External client for processing, if required.
+        :param text: List of input text elements.
         :return: A list of extracted triplets from all elements.
         """
-        return self.extract_entities_and_relationships(elements, client)
+        return self.extract_entities_and_relationships(text, **kwargs)
