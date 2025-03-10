@@ -20,7 +20,7 @@ class DummyReranker(Reranker):
         """
         super().__init__()
 
-    def get_relevant_chunks(self, query: str, documents: List[str]) -> List[str]:
+    def get_relevant_chunks(self, query: str, documents: List[str], **kwargs) -> List[str]:
         """
         Returns the input documents unchanged.
 
@@ -49,7 +49,7 @@ class CrossEncoderReranker(Reranker):
         self.model = CrossEncoder(model_name)
         self.top_k = top_k
 
-    def get_relevant_chunks(self, query: str, documents: List[str]) -> List[str]:
+    def get_relevant_chunks(self, query: str, documents: List[str], **kwargs) -> List[str]:
         """
         Reranks documents based on relevance scores predicted by the CrossEncoder model.
 
@@ -121,7 +121,8 @@ class HybridRerankerTopK(Reranker):
             documents,
             summary_index,
             bm25,
-            embedder
+            embedder,
+            **kwargs
     ):
         """
         Retrieve the top-k relevant documents.
@@ -172,6 +173,7 @@ class HybridRerankerThreshold(Reranker):
             summary_index: np.ndarray,
             bm25: BM25Okapi,
             embedder: object,
+            **kwargs
     ) -> List[str]:
         """
         Retrieve the top-k relevant documents.
