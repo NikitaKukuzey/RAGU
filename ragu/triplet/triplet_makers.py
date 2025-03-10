@@ -53,7 +53,8 @@ class TripletLLM(TripletExtractor):
     def extract_entities_and_relationships(
             self,
             text: List[str],
-            client: BaseLLM
+            client: BaseLLM,
+            **kwargs
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Processes text in batches while preserving original corpus indices.
 
@@ -239,7 +240,7 @@ class ComposedTripletExtractor(TripletExtractor):
             extracted_entities.append(entities_df)
 
         return pd.concat(extracted_entities, ignore_index=True) if extracted_entities \
-            else pd.DataFrame(columns=["entity", "entity_type", "chunk_id"])
+            else pd.DataFrame(columns=["entity", "entity_type", "start", "end", "chunk_id"])
 
     def request_ner(self, text: str) -> pd.DataFrame:
         """
@@ -253,5 +254,5 @@ class ComposedTripletExtractor(TripletExtractor):
             logging.error(f"NER request failed: {e}")
             return pd.DataFrame(columns=["entity", "entity_type"])
 
-        data = [(text[start:end], ent_type) for start, end, ent_type in entities if ent_type in self.valid_entities]
-        return pd.DataFrame(data, columns=["entity", "entity_type"])
+        data = [(text[start:end], ent_type, start, end) for start, end, ent_type in entities if ent_type in self.valid_entities]
+        return pd.DataFrame(data, columns=["entity", "entity_type", "start", "end"])
