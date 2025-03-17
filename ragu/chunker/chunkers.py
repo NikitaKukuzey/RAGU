@@ -2,12 +2,12 @@ import torch
 import numpy as np
 from typing import List
 
-from razdel import sentenize
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+from razdel import sentenize
+from smart_chunker.chunker import SmartChunker
+from sentence_transformers import SentenceTransformer
 
 from ragu.chunker.base_chunker import Chunker
-from ragu.common.types import Chunk
 
 
 @Chunker.register("simple")
@@ -24,10 +24,11 @@ class SimpleChunker(Chunker):
         :param max_chunk_size: Maximum chunk size in characters.
         :param overlap: Number of overlapping characters between consecutive chunks.
         """
+        super().__init__()
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
-    def get_chunks(self, documents: str | List[str]) -> List[Chunk]:
+    def split(self, documents: str | List[str]) -> List[str]:
         """
         Splits documents into fixed-size overlapping chunks.
 
@@ -38,7 +39,7 @@ class SimpleChunker(Chunker):
         if isinstance(documents, str):
             documents = [documents]
 
-        chunks: list[Chunk] = []
+        chunks: list[str] = []
         for document in documents:
             sentences = [chunk.text for chunk in sentenize(document)]
             current_chunk = ""
@@ -87,7 +88,8 @@ class SemanticTextChunker(Chunker):
         """
         return "cuda" if torch.cuda.is_available() else "cpu"
 
-    def split_text_by_chunks(self, text: str) -> List[str]:
+    @staticmethod
+    def split_text_by_chunks(text: str) -> List[str]:
         """
         Splits text into sentence-based chunks using Razdel.
 
@@ -106,7 +108,7 @@ class SemanticTextChunker(Chunker):
         embeddings = self.model.encode(document, convert_to_tensor=True, show_progress_bar=False)
         return embeddings.cpu().numpy()
 
-    def compute_similarities(self, chunks: List[Chunk]) -> np.ndarray:
+    def compute_similarities(self, chunks: List[str]) -> np.ndarray:
         """
         Computes pairwise cosine similarities between consecutive chunks.
 
@@ -125,7 +127,7 @@ class SemanticTextChunker(Chunker):
         ])
         return similarities
 
-    def join_chunks_by_semantics(self, sentences: List[str], similarities: np.ndarray) -> List[Chunk]:
+    def join_chunks_by_semantics(self, sentences: List[str], similarities: np.ndarray) -> List[str]:
         """
         Merges chunks based on semantic similarity, ensuring chunk sizes do not exceed the limit.
 
@@ -136,7 +138,7 @@ class SemanticTextChunker(Chunker):
         if len(sentences) < 2:
             return sentences
 
-        n_tokens = len(self.model.tokenize(" ".join(sentences))["input_ids"])
+        n_tokens = len(self.model.tokenize([" ".join(sentences)])["input_ids"])
         if n_tokens <= self.max_chunk_size:
             return [" ".join(sentences)]
 
@@ -152,7 +154,7 @@ class SemanticTextChunker(Chunker):
             )
         )
 
-    def get_chunks(self, documents: str | List[str]) -> List[Chunk]:
+    def split(self, documents: str | List[str]) -> List[str]:
         """
         Splits text into semantically coherent chunks.
 
@@ -169,3 +171,36 @@ class SemanticTextChunker(Chunker):
             chunks = self.join_chunks_by_semantics(sentences, similarities)
             all_chunks.extend(chunks)
         return all_chunks
+
+
+@Chunker.register("smart_chunker")
+class SmartSemanticChunker(Chunker):
+    def __init__(
+            self,
+            class_name: str,
+            reranker_name='BAAI/bge-reranker-v2-m3',
+            newline_as_separator=False,
+            device='cuda:0',
+            max_chunk_length=250,
+            minibatch_size=8,
+            verbose=False
+    ):
+        super().__init__()
+
+        self.chunker = SmartChunker(
+            reranker_name=reranker_name,
+            newline_as_separator=newline_as_separator,
+            device=device,
+            max_chunk_length=max_chunk_length,
+            minibatch_size=minibatch_size,
+            verbose=verbose
+        )
+
+    def split(self, documents: str | List[str]) -> List[str]:
+        if isinstance(documents, str):
+            documents = [documents]
+
+        chunks: list[str] = []
+        for document in tqdm(documents, desc="Index creation: splitting documents"):
+            chunks.extend(self.chunker.split_into_chunks(source_text=document))
+        return chunks
