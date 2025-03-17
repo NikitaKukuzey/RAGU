@@ -1,5 +1,5 @@
 import math
-from typing import List, Generator
+from typing import List, Generator, Iterable, Any, Sized
 
 
 class BatchGenerator:
@@ -11,7 +11,7 @@ class BatchGenerator:
         batch_size (int): The size of each batch.
     """
 
-    def __init__(self, data: List[str], batch_size: int):
+    def __init__(self, data: Iterable[Any] | Sized, batch_size: int):
         """
         Initializes the BatchGenerator.
 
@@ -20,6 +20,9 @@ class BatchGenerator:
         """
         self.data = data
         self.batch_size = batch_size
+
+    def __call__(self) -> Generator:
+        yield self.get_batches()
 
     def get_batches(self) -> Generator:
         """

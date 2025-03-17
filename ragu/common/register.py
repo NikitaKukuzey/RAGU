@@ -49,7 +49,8 @@ class Registrable:
         registry = cls._registry.get(cls, {})
         if class_name not in registry:
             raise ValueError(f"Class named '{class_name}' not found.")
-        return registry[class_name](class_name, *args, **kwargs)
+        kwargs.pop('class_name', None)
+        return registry[class_name](*args, **kwargs)
     
 
 

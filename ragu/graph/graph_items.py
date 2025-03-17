@@ -6,6 +6,8 @@ from ragu.common.batch_generator import BatchGenerator
 from ragu.common.llm import BaseLLM
 from ragu.common.types import Node, Relation
 
+from ragu.utils.default_prompts.artifact_summarization_prompts import artifacts_summarization_prompt
+
 
 def get_nodes(entities_df: pd.DataFrame) -> List[Node]:
     """
@@ -96,7 +98,6 @@ class EntitySummarizer:
         :param batch_size: Number of rows to process in each batch.
         :return: DataFrame with updated entity descriptions after summarization.
         """
-        from ragu.utils.default_prompts.entites_prompts import entities_description_summary_prompt
 
         single_desc = data[data["description_count"] == 1]
         multi_desc = data[data["description_count"] > 1].copy()
@@ -105,12 +106,12 @@ class EntitySummarizer:
 
         responses = []
         for batch in tqdm(
-                batch_generator.get_batches(),
-                desc="Index creation: summarizing entity descriptions",
-                total=len(batch_generator)
+            batch_generator.get_batches(),
+            desc="Index creation: summarizing entity descriptions",
+            total=len(batch_generator)
         ):
             texts = [f"Сущность: {row["entity_name"]}\nОписание: {row["entity_description"]}" for row in batch]
-            responses.extend(client.generate(texts, entities_description_summary_prompt))
+            responses.extend(client.generate(texts, artifacts_summarization_prompt["summarize_entity_descriptions"]))
 
         multi_desc.loc[:, "entity_description"] = responses
 
@@ -162,7 +163,6 @@ class RelationSummarizer:
         :param batch_size: Number of rows to process in each batch.
         :return: DataFrame with updated relationship descriptions after summarization.
         """
-        from ragu.utils.default_prompts.entites_prompts import relationships_description_summary_prompt
 
         single_desc = data[data["description_count"] == 1]
         multi_desc = data[data["description_count"] > 1].copy()
@@ -180,7 +180,7 @@ class RelationSummarizer:
                 Description: {row["relationship_description"]}
                 """.strip() for row in batch
             ]
-            responses.extend(client.generate(texts, relationships_description_summary_prompt))
+            responses.extend(client.generate(texts, artifacts_summarization_prompt["summarize_relationship_descriptions"]))
 
         multi_desc.loc[:, "relationship_description"] = responses
         return pd.concat([single_desc, multi_desc], ignore_index=True)
