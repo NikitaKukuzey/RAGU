@@ -2,12 +2,17 @@
 
 RAGu (Retrieval-Augmented Generation Utility) is a basic Graph RAG (Retrieval-Augmented Generation) system designed to facilitate the extraction and generation of information from text data using a graph-based approach. This system allows users to build a knowledge graph from text files and query it using natural language questions.
 
+<p align="center">
+  <img src="examples/example_of_visualization.png" width="400" height="350">
+</p>
+
 ## Features
 
-- **Text Extraction**: Extract text from `.txt` files stored in nested folders.
 - **Graph Construction**: Build a knowledge graph from the extracted text.
-- **Querying**: Query the graph using natural language questions to retrieve relevant information.
 - **Customizable**: Easily extendable with new chunkers and rerankers.
+- **Speed**: Less time on indexing by using special small models for NER, relation extraction and definition generating.
+
+### !!! Getting answers on query doesn't works yet. Only graph construction
 
 ## Installation
 
@@ -57,13 +62,12 @@ def main():
         get_parameters('configs/default_config.yaml')
     )
     
-    graph_rag = GraphRag(
-        client,
+    graph_rag = GraphRag(client).from_parameters(
         chunker_params,
         triplet_params,
         reranker_params,
         generator_params,
-        graph_params,
+        graph_params
     ).build(text).save_community_summary('summary.json').save_graph('graph.gml')
 
     questions = [
@@ -78,6 +82,11 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+### Example of visualization:
+<p align="center">
+  <img src="examples/The%20House%20of%20Romanov.png" width="400" height="350">
+</p>
 
 ## Configuration
 
