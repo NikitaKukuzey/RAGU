@@ -43,10 +43,7 @@ def detect_communities(graph: nx.Graph) -> Dict[int, Dict[int, Community]]:
     community_mapping: HierarchicalClusters = hierarchical_leiden(graph)
 
     # Structure: level -> cluster_id -> (nodes, edges)
-    clusters: Dict[int, Dict[int, Set]] = defaultdict(
-        lambda: defaultdict(lambda: {"nodes": set(), "edges": set()})
-    )
-
+    clusters = defaultdict(lambda: defaultdict(lambda: {"nodes": set(), "edges": set()}))
     for partition in community_mapping:
         level = partition.level
         cluster_id = partition.cluster
