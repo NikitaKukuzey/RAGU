@@ -16,11 +16,10 @@ class SimpleChunker(Chunker):
     A simple chunker that splits text into fixed-size overlapping chunks.
     """
     
-    def __init__(self, class_name: str, max_chunk_size: int, overlap: int) -> None:
+    def __init__(self, max_chunk_size: int, overlap: int) -> None:
         """
         Initializes the simple chunker.
 
-        :param class_name: Identifier for the chunker class.
         :param max_chunk_size: Maximum chunk size in characters.
         :param overlap: Number of overlapping characters between consecutive chunks.
         """
@@ -68,11 +67,10 @@ class SemanticTextChunker(Chunker):
     A semantic chunker that splits text based on sentence boundaries and semantic similarity.
     """
     
-    def __init__(self, class_name: str, model_name: str, max_chunk_size: int) -> None:
+    def __init__(self, model_name: str, max_chunk_size: int) -> None:
         """
         Initializes the semantic chunker.
 
-        :param class_name: Identifier for the chunker class.
         :param model_name: Name of the sentence transformer model.
         :param max_chunk_size: Maximum chunk size in tokens.
         """
@@ -177,7 +175,6 @@ class SemanticTextChunker(Chunker):
 class SmartSemanticChunker(Chunker):
     def __init__(
             self,
-            class_name: str,
             reranker_name='BAAI/bge-reranker-v2-m3',
             newline_as_separator=False,
             device='cuda:0',
@@ -186,7 +183,6 @@ class SmartSemanticChunker(Chunker):
             verbose=False
     ):
         super().__init__()
-
         self.chunker = SmartChunker(
             reranker_name=reranker_name,
             newline_as_separator=newline_as_separator,
