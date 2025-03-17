@@ -1,15 +1,11 @@
-import json
 from tqdm import tqdm
+from typing import List, Dict
 
 from ragu import Generator
 from ragu.common.batch_generator import BatchGenerator
 from ragu.common.llm import BaseLLM
-from ragu.common.logger import logging
 from ragu.utils.parse_json_output import extract_json
-from ragu.utils.default_prompts.generation_prompt import (
-    generation_rating_prompt,
-    generation_final_answer_prompt
-)
+from ragu.utils.default_prompts.generation_prompt import generator_prompts
 
 
 @Generator.register("original_generator")
@@ -20,11 +16,9 @@ class OriginalGenerator(Generator):
     summaries, filters them, sorts them, and finally generates a response based on these answers.
     """
     
-    def __init__(self, class_name, batch_size: int):
+    def __init__(self, batch_size: int):
         """
         Initializes the generator with model information and system prompts.
-        
-        :param class_name: The class name (not used).
         """
         super().__init__()
         self.batch_size = batch_size
@@ -32,7 +26,7 @@ class OriginalGenerator(Generator):
     def generate_final_answer(
             self,
             query: str,
-            community_summaries: list[str],
+            community_summaries: List[str],
             client: BaseLLM,
             *args,
             **kwargs
@@ -52,7 +46,7 @@ class OriginalGenerator(Generator):
 
         return final_answer
 
-    def _generate_intermediate_answers(self, query: str, batch_generator: BatchGenerator, client: BaseLLM) -> list[str]:
+    def _generate_intermediate_answers(self, query: str, batch_generator: BatchGenerator, client: BaseLLM) -> List[str]:
         """
         Generates intermediate answers for each batch of community summaries.
 
@@ -69,12 +63,12 @@ class OriginalGenerator(Generator):
         ):
             context_text = self._format_context(batch)
             prompt_text = f"Запрос: {query}\n\nКонтекст:\n{context_text}\n\n"
-            raw_answers = client.generate(prompt_text, generation_rating_prompt)
+            raw_answers = client.generate(prompt_text, generator_prompts["generate_intermediate_responses"])
             raw_intermediate_answers.extend(self._ensure_list(raw_answers))
 
         return raw_intermediate_answers
 
-    def _format_context(self, batch: list[str]) -> str:
+    def _format_context(self, batch: List[str]) -> str:
         """
         Formats the context text for a given batch of summaries.
 
@@ -83,7 +77,7 @@ class OriginalGenerator(Generator):
         """
         return "\n".join(f"{i + 1}. {summary}" for i, summary in enumerate(batch))
 
-    def _ensure_list(self, raw_answers: str | list[str]) -> list[str]:
+    def _ensure_list(self, raw_answers: str | List[str]) -> List[str]:
         """
         Ensures the raw answers are always returned as a list.
 
@@ -92,16 +86,18 @@ class OriginalGenerator(Generator):
         """
         return [raw_answers] if isinstance(raw_answers, str) else raw_answers
 
-    def _process_intermediate_answers(self, raw_intermediate_answers: list[str]) -> list[dict]:
+    def _process_intermediate_answers(self, raw_intermediate_answers: List[str]) -> List[dict]:
         """
         Processes raw intermediate answers by extracting JSON, filtering, and sorting.
 
         :param raw_intermediate_answers: List of raw intermediate answers.
         :return: List of processed intermediate answers.
         """
-        intermediate_answers = []
+        intermediate_answers: List[Dict] = []
         for answer in raw_intermediate_answers:
-            intermediate_answers.extend(extract_json(answer)["points"])
+            extracted_data = extract_json(answer)
+            if extracted_data:
+                intermediate_answers.extend(extracted_data["points"])
 
         # Filter and sort intermediate answers by score
         intermediate_answers = [
@@ -110,7 +106,7 @@ class OriginalGenerator(Generator):
         intermediate_answers.sort(key=lambda x: x.get("score", 0), reverse=True)
         return intermediate_answers
 
-    def _generate_final_response(self, query: str, intermediate_answers: list[dict], client: BaseLLM) -> str:
+    def _generate_final_response(self, query: str, intermediate_answers: List[dict], client: BaseLLM) -> str:
         """
         Generates the final response using the processed intermediate answers.
 
@@ -122,4 +118,4 @@ class OriginalGenerator(Generator):
             f"Ответ: {ans['description']}" for ans in intermediate_answers
         )
         context = f"Вопрос:{query}\n\nПромежуточные ответы:\n{formatted_answers}"
-        return client.generate(context, generation_final_answer_prompt)
+        return client.generate(context, generator_prompts["generate_final_answer"])
