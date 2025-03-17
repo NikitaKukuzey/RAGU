@@ -1,9 +1,10 @@
 import json
 import logging
 import pickle
+from typing import List, Optional, Any
 
 import networkx as nx
-from typing import List, Optional, Any
+from pyvis.network import Network
 
 from ragu import (
     Chunker,
@@ -40,13 +41,38 @@ class GraphRag:
 
     def __init__(
             self,
-            client: Optional[BaseLLM] = None,
+            client: Optional[BaseLLM],
+            chunker = None,
+            triplet_extractor = None,
+            reranker=None,
+            generator = None,
+            graph_builder = None,
+    ) -> None:
+        """
+        Initializes the GraphRag pipeline with configured components for chunking, triplet extraction,
+        reranking, and generation.
+
+        """
+        self.client = client
+        self.chunker = chunker
+        self.triplet = triplet_extractor
+        self.reranker = reranker
+        self.generator = generator
+        self.graph_builder = graph_builder
+
+        self.graph = None
+        self.community_summary: Optional[dict] = None
+        self.community_summary_index = None
+        self.bm_25_index = None
+
+    def from_parameters(
+            self,
             chunker_parameters: Optional[ChunkerParameters] = None,
             triplet_extractor_parameters: Optional[TripletExtractorParameters] = None,
             reranker_parameters: Optional[RerankerParameters] = None,
             generator_parameters: Optional[GeneratorParameters] = None,
             graph_builder_parameters: Optional[GraphParameters] = None,
-    ) -> None:
+    ) -> "GraphRag":
         """
         Initializes the GraphRag pipeline with configured components for chunking, triplet extraction,
         reranking, and generation.
@@ -55,19 +81,16 @@ class GraphRag:
         :param triplet_extractor_parameters: Configuration parameters for the triplet extractor.
         :param reranker_parameters: Configuration parameters for the reranker.
         :param generator_parameters: Configuration parameters for the generator.
+        :param graph_builder_parameters: Configuration parameters for the graph builder.
         """
-        self.client = client
 
         self.chunker = Chunker.get(**chunker_parameters) if chunker_parameters else None
         self.triplet = TripletExtractor.get(**triplet_extractor_parameters) if triplet_extractor_parameters else None
         self.reranker = Reranker.get(**reranker_parameters) if reranker_parameters else None
         self.generator = Generator.get(**generator_parameters) if generator_parameters else None
-        self.graph_builder = GraphBuilder(client=client, **graph_builder_parameters) if graph_builder_parameters else None
+        self.graph_builder = GraphBuilder(client=self.client, **graph_builder_parameters) if graph_builder_parameters else None
 
-        self.graph = None
-        self.community_summary: Optional[dict] = None
-        self.community_summary_index = None
-        self.bm_25_index = None
+        return self
 
     def build(self, documents: List[str]) -> "GraphRag":
         """
@@ -208,7 +231,10 @@ class GraphRag:
 
         community_summary = self.community_summary.get(which_level, None)
         if community_summary is None:
-            logging.log(logging.ERROR, f"No summary available for the specified level: {which_level}. Get 0 level summary instead.")
+            logging.log(
+                logging.ERROR,
+                f"No summary available for the specified level: {which_level}. Get 0 level summary instead."
+            )
             community_summary = self.community_summary.get(0)
 
         # Use the reranker to retrieve relevant chunks summary the community summaries
@@ -221,52 +247,15 @@ class GraphRag:
         )
         return self.generator(query, relevant_summaries, client)
 
-    def visualize(self) -> "GraphRag":
+    def visualize(self, where_to_save: str = "knowledge_graph.html") -> "GraphRag":
         """
-        Visualizes the knowledge graph with node degree coloring using matplotlib.
+        Save a visualization of the knowledge graph in the HTML file.
         """
-        from matplotlib.colors import LinearSegmentedColormap
-        import matplotlib.pyplot as plt
+        if self.graph is None:
+            raise RuntimeError("Graph is not built. Please build or load the graph first.")
 
-        degrees = dict(self.graph.degree())
-
-        min_degree = min(degrees.values())
-        max_degree = max(degrees.values())
-        if max_degree == min_degree:
-            normalized_degrees = [0.5 for _ in degrees.values()]
-        else:
-            normalized_degrees = [
-                (degree - min_degree) / (max_degree - min_degree)
-                for degree in degrees.values()
-            ]
-
-        colors = ["#d8d8b3", "#006400"]
-        custom_cmap = LinearSegmentedColormap.from_list("BeigeGreen", colors)
-        colormap = custom_cmap
-        node_colors = [colormap(norm_degree) for norm_degree in normalized_degrees]
-
-        fig, ax = plt.subplots()
-
-        pos = nx.kamada_kawai_layout(self.graph)
-
-        nx.draw(
-            self.graph,
-            pos,
-            ax=ax,
-            with_labels=True,
-            node_color=node_colors,
-            edge_color='gray',
-            node_size=2000,
-            font_size=10,
-            font_weight='bold'
-        )
-
-        norm = plt.Normalize(vmin=min_degree, vmax=max_degree)
-        sm = plt.cm.ScalarMappable(cmap=colormap, norm=norm)
-        sm.set_array([])
-        plt.colorbar(sm, ax=ax, label="Node Degree")
-
-        plt.title("GML Graph Visualization with Node Degree Coloring")
-        plt.show()
+        net = Network()
+        net.from_nx(self.graph)
+        net.show(where_to_save)
 
         return self
