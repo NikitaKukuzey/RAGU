@@ -3,7 +3,7 @@ from itertools import combinations
 from typing import List
 
 from ragu.search_engine.base_engine import BaseEngine
-from ragu.graph.graph_rag import GraphRag
+from ragu.graph.knowledge_graph import KnowledgeGraph
 from ragu.triplet.base_triplet import TripletExtractor
 from ragu.common.llm import BaseLLM
 
@@ -14,7 +14,7 @@ class BFSEngine(BaseEngine):
     """
     def __init__(
             self,
-            knowledge_graph: GraphRag,
+            knowledge_graph: KnowledgeGraph,
             artifacts_extractor: TripletExtractor,
             client: BaseLLM=None,
             *args,
