@@ -1,7 +1,7 @@
 import logging
 import requests
 import pandas as pd
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from tqdm import tqdm
 
 import ragu.common.settings
@@ -21,12 +21,13 @@ class TripletLLM(TripletExtractor):
     RELATION_COLUMNS = ["source_entity", "target_entity", "relationship_description", "chunk_id"]
 
     def __init__(
-            self,
-            validate: bool,
-            entity_list_type: str,
-            batch_size: int,
+        self,
+        entity_list_type: str,
+        batch_size: int,
+        validate: bool=False,
     ):
-        """Initializes the TripletLLM extractor.
+        """
+        Initializes the TripletLLM extractor.
 
         :param validate: Flag to enable triplet validation
         :param entity_list_type: Type of entities to extract
@@ -43,14 +44,16 @@ class TripletLLM(TripletExtractor):
         self.validation_system_prompts = validation_prompts[self.entity_list_type]
 
     def extract_entities_and_relationships(
-            self,
-            text: List[str],
-            client: BaseLLM,
-            **kwargs
+        self,
+        chunks_df: pd.DataFrame,
+        client: BaseLLM=None,
+        *args,
+        **kwargs
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Processes text in batches while preserving original corpus indices.
+        """
+        Processes text in batches while preserving original corpus indices.
 
-        :param text: List of text chunks to process
+        :param chunks_df: DataFrame containing text chunks after splitting by chunker
         :param client: LLM client instance
         :return: Tuple containing two DataFrames:
             - Entities DataFrame with columns: entity_name, entity_type, chunk_id
@@ -60,23 +63,24 @@ class TripletLLM(TripletExtractor):
         """
 
         entities, relations = [], []
-        batch_generator = BatchGenerator(text, batch_size=self.batch_size)
+        text_df = chunks_df["chunk"]
+        chunks_id_df = chunks_df["chunk_id"]
+        batch_generator = BatchGenerator(text_df.tolist(), batch_size=self.batch_size)
 
         for batch_idx, batch in tqdm(
             enumerate(batch_generator.get_batches()),
             desc="Index creation: extracting entities and relationships",
             total=len(batch_generator)
         ):
-            raw_data: list[str] = self._get_batched_raw_entities_and_relations(batch, client)
-            parsed_batch = self._get_parsed_data(raw_data)
-
-            if parsed_batch is not []:
-                self._process_parsed_batch(parsed_batch, batch_idx, entities, relations)
+            raw_data = self._get_batched_raw_entities_and_relations(batch, client)
+            parsed_batch = self._parse_llm_response(raw_data)
+            self._process_parsed_batch(parsed_batch, chunks_id_df, entities, relations)
 
         return self._finalize_dataframes(entities, relations)
 
     def _get_batched_raw_entities_and_relations(self, batch: List[str], client: BaseLLM) -> List[str]:
-        """Processes a single batch through LLM pipeline.
+        """
+        Processes a single batch through LLM pipeline.
 
         :param batch: List of text chunks in current batch
         :param client: LLM client instance
@@ -85,82 +89,67 @@ class TripletLLM(TripletExtractor):
         raw_data = client.generate(batch, self.system_prompts)
         return self.validate_triplets(batch, raw_data, client) if self.validate else raw_data
 
-    def _get_parsed_data(self, raw_data: List[str]) -> Optional[List[Tuple[pd.DataFrame, pd.DataFrame]]]:
-        """Parses LLM responses for a batch.
-
-        :param raw_data: List of raw LLM responses
-        :return: List of (entities, relationships) DataFrames or None if parsing fails
-        """
-        parsed_data = self._parse_llm_response(raw_data)
-        return parsed_data if parsed_data and any(not e.empty or not r.empty for e, r in parsed_data) else [(pd.DataFrame(),pd.DataFrame)]
-
     def _process_parsed_batch(
-            self,
-            parsed_batch: List[Tuple[pd.DataFrame, pd.DataFrame]],
-            batch_idx: int,
-            entities: List[pd.DataFrame],
-            relations: List[pd.DataFrame]
+        self,
+        parsed_batch: List[Tuple[pd.DataFrame, pd.DataFrame]],
+        chunks_id_df: pd.DataFrame,
+        entities: List[pd.DataFrame],
+        relations: List[pd.DataFrame]
     ) -> None:
-        """Processes parsed batch data with absolute indexing.
+        """
+        Processes parsed batch data with absolute indexing.
 
         :param parsed_batch: Parsed data from current batch
-        :param batch_idx: Batch index
         :param entities: List to accumulate entity DataFrames
         :param relations: List to accumulate relationship DataFrames
         """
-        start_idx = batch_idx * self.batch_size
-        for j, (entity_df, relation_df) in enumerate(parsed_batch):
-            absolute_idx = start_idx + j
-            self._add_chunk_id(entity_df, absolute_idx, entities)
-            self._add_chunk_id(relation_df, absolute_idx, relations)
+        for i, (entity_df, relation_df) in enumerate(parsed_batch):
+            entity_df["chunk_id"] = chunks_id_df.iloc[i]
+            relation_df["chunk_id"] = chunks_id_df.iloc[i]
 
-    @staticmethod
-    def _add_chunk_id(
-            df: pd.DataFrame,
-            chunk_id: int,
-            storage: List[pd.DataFrame]
-    ) -> None:
-        """Adds chunk ID to DataFrame and stores if contains data.
-
-        :param df: DataFrame to process
-        :param chunk_id: Absolute chunk ID to assign
-        :param storage: List of DataFrames to append to
-        """
-        if not df.empty:
-            df["chunk_id"] = chunk_id
-            storage.append(df)
+            entities.append(entity_df)
+            relations.append(relation_df)
 
     def _finalize_dataframes(
-            self,
-            entities: List[pd.DataFrame],
-            relations: List[pd.DataFrame]
+        self,
+        entities: List[pd.DataFrame],
+        relations: List[pd.DataFrame]
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Creates final output DataFrames from accumulated results.
+        """
+        Creates final output DataFrames from accumulated results.
 
         :param entities: List of entity DataFrames
         :param relations: List of relationship DataFrames
         :return: Tuple of concatenated DataFrames
         """
-        return (
-            pd.concat(entities, ignore_index=True) if entities else pd.DataFrame(columns=self.ENTITY_COLUMNS),
-            pd.concat(relations, ignore_index=True) if relations else pd.DataFrame(columns=self.RELATION_COLUMNS)
-        )
+        entities = pd.concat(entities, ignore_index=True) if entities else pd.DataFrame(columns=self.ENTITY_COLUMNS)
+        relations = pd.concat(relations, ignore_index=True) if relations else pd.DataFrame(columns=self.RELATION_COLUMNS)
+
+        entities.dropna(inplace=True)
+        relations.dropna(inplace=True)
+
+        # Removing "ё" is additional normalization for Russian language
+        entities["entity_name"] = entities["entity_name"].str.upper().str.replace('Ё', 'Е')
+        relations["source_entity"] = relations["source_entity"].str.upper().str.replace('Ё', 'Е')
+        relations["target_entity"] = relations["target_entity"].str.upper().str.replace('Ё', 'Е')
+
+        return entities, relations
 
     @no_throw
     def validate_triplets(
-            self,
-            text: List[str],
-            raw_triplets: List[str],
-            client: BaseLLM
+        self,
+        text: List[str],
+        raw_triplets: List[str],
+        client: BaseLLM
     ) -> List[str]:
-        """Validates extracted triplets using LLM.
+        """
+        Validates extracted triplets using LLM.
 
         :param text: Original text chunks
         :param raw_triplets: Extracted triplets to validate
         :param client: LLM client instance
         :return: Validated triplet data
         """
-
         validation_inputs = [
             f"Text:\n{t}\n\nTriplets:\n{rt}"
             for t, rt in zip(text, raw_triplets)
@@ -168,17 +157,15 @@ class TripletLLM(TripletExtractor):
         return client.generate(validation_inputs, self.validation_system_prompts)
 
     @no_throw
-    def _parse_llm_response(
-            self,
-            batched_raw_data: List[str]
-    ) -> List[Tuple[pd.DataFrame, pd.DataFrame]]:
-        """Parses individual LLM responses while handling errors.
+    def _parse_llm_response(self, batched_raw_data: List[str]) -> List[Tuple[pd.DataFrame, pd.DataFrame]]:
+        """
+        Parses individual LLM responses while handling errors.
 
         :param batched_raw_data: Raw LLM responses for a batch
         :return: List of parsed (entities, relationships) DataFrames
         """
-        parsed_batch = []
 
+        parsed_batch = []
         for raw in batched_raw_data:
             try:
                 data = extract_json(raw)
@@ -186,7 +173,9 @@ class TripletLLM(TripletExtractor):
                 relations = pd.DataFrame(data["relationships"])
             except Exception as e:
                 logging.error(f"Parse error: {e}\nRaw data: {raw}")
-            else:
+                entities = pd.DataFrame(columns=self.ENTITY_COLUMNS[:-1])
+                relations = pd.DataFrame(columns=self.RELATION_COLUMNS[:-1])
+            finally:
                 parsed_batch.append((entities, relations))
 
         return parsed_batch
