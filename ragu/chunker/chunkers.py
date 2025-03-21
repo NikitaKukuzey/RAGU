@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import numpy as np
 from typing import List
@@ -8,6 +9,7 @@ from smart_chunker.chunker import SmartChunker
 from sentence_transformers import SentenceTransformer
 
 from ragu.chunker.base_chunker import Chunker
+from ragu.utils.hash import compute_mdhash_id
 
 
 @Chunker.register("simple")
@@ -27,7 +29,7 @@ class SimpleChunker(Chunker):
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
-    def split(self, documents: str | List[str]) -> List[str]:
+    def split(self, documents: str | List[str]) -> pd.DataFrame:
         """
         Splits documents into fixed-size overlapping chunks.
 
@@ -58,7 +60,9 @@ class SimpleChunker(Chunker):
             if current_chunk.strip():
                 chunks.append(current_chunk.strip())
 
-        return chunks
+        chunk_id = [compute_mdhash_id(chunk) for chunk in chunks]
+
+        return pd.DataFrame({"chunk": chunks, "chunk_id": chunk_id})
 
 
 @Chunker.register("semantic")
@@ -152,7 +156,7 @@ class SemanticTextChunker(Chunker):
             )
         )
 
-    def split(self, documents: str | List[str]) -> List[str]:
+    def split(self, documents: str | List[str]) -> pd.DataFrame:
         """
         Splits text into semantically coherent chunks.
 
@@ -168,7 +172,10 @@ class SemanticTextChunker(Chunker):
             similarities = self.compute_similarities(sentences)
             chunks = self.join_chunks_by_semantics(sentences, similarities)
             all_chunks.extend(chunks)
-        return all_chunks
+
+        chunk_id = [compute_mdhash_id(chunk) for chunk in all_chunks]
+
+        return pd.DataFrame({"chunk": all_chunks, "chunk_id": chunk_id})
 
 
 @Chunker.register("smart_chunker")
@@ -192,11 +199,14 @@ class SmartSemanticChunker(Chunker):
             verbose=verbose
         )
 
-    def split(self, documents: str | List[str]) -> List[str]:
+    def split(self, documents: str | List[str]) -> pd.DataFrame:
         if isinstance(documents, str):
             documents = [documents]
 
         chunks: list[str] = []
         for document in tqdm(documents, desc="Index creation: splitting documents"):
             chunks.extend(self.chunker.split_into_chunks(source_text=document))
-        return chunks
+
+        chunk_id = [compute_mdhash_id(chunk) for chunk in chunks]
+
+        return pd.DataFrame({"chunk": chunks, "chunk_id": chunk_id})
