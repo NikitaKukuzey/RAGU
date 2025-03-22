@@ -151,6 +151,9 @@ class KnowledgeGraph:
             cluster_id = partition.cluster
             node = partition.node
 
+            self.graph.nodes[node]["level"] = level
+            self.graph.nodes[node]["cluster"] = cluster_id
+
             clusters[level][cluster_id]["nodes"].add(node)
 
             for neighbor in self.graph.neighbors(node):
