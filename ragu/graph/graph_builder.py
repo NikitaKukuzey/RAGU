@@ -379,7 +379,11 @@ class KnowledgeGraphBuilder:
         )
 
         knowledge_graph.community_summary = summary
-        knowledge_graph.artifacts = GraphArtifacts(entities, relationships, chunks)
+        knowledge_graph.artifacts = GraphArtifacts(
+            entities=entities,
+            relations=relationships,
+            chunks=chunks
+        )
 
         return knowledge_graph
 
