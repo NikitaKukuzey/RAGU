@@ -3,23 +3,13 @@ import os
 import openai
 import logging
 import pandas as pd
-from datetime import datetime
+
+from ragu.common.global_parameters import logs_dir, current_time, run_output_dir
+
 
 openai._utils._logs.logger.setLevel(logging.WARNING)
 openai._utils._logs.httpx_logger.setLevel(logging.WARNING)
 
-current_dir = os.getcwd()
-temp_dir = os.path.join(current_dir, "temp")
-logs_dir = os.path.join(temp_dir, "logs")
-outputs_dir = os.path.join(temp_dir, "outputs")
-
-os.makedirs(logs_dir, exist_ok=True)
-os.makedirs(outputs_dir, exist_ok=True)
-
-current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-run_output_dir = os.path.join(outputs_dir, current_time)
-os.makedirs(run_output_dir, exist_ok=True)
 
 log_filename = os.path.join(logs_dir, f"ragu_logs_{current_time}.log")
 logging.basicConfig(

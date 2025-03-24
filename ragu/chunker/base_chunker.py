@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
+import pandas as pd
+
 from ragu.common.register import Registrable
-from ragu.common.types import Chunk
 
 
 class Chunker(ABC, Registrable):
@@ -15,7 +16,7 @@ class Chunker(ABC, Registrable):
         pass
     
     @abstractmethod
-    def split(self, documents: str | List[str]) -> List[str]:
+    def split(self, documents: str | List[str]) -> pd.DataFrame:
         """
         Abstract method for splitting documents into smaller chunks.
         Must be implemented in subclasses.
@@ -25,7 +26,7 @@ class Chunker(ABC, Registrable):
         """
         pass
 
-    def __call__(self, documents: str | List[str]) -> List[str]:
+    def __call__(self, documents: str | List[str]) -> pd.DataFrame:
         """
         Calls the chunker on a given list of documents.
 

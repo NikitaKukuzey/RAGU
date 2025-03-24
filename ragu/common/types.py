@@ -18,6 +18,9 @@ class Node:
     id: int
     entity: str
     description: str
+    source_chunk_id: list[str]
+    cluster_id: int
+    level: int
 
 
 @dataclass
@@ -36,6 +39,8 @@ class Community:
         entities: A list of tuples where each tuple contains an entity ID and its description.
         relations: A list of tuples where each tuple represents an edge in the format (source, target, label).
     """
+    level: int
+    cluster_id: int
     entities: List[Tuple[Hashable, str]]
     relations: List[Tuple[Hashable, Hashable, str]]
 

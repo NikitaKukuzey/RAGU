@@ -1,108 +1,126 @@
-# RAGu
+# 📚 RAGU:  Retrieval-Augmented Graph Utility
 
-RAGu (Retrieval-Augmented Generation Utility) is a basic Graph RAG (Retrieval-Augmented Generation) system designed to facilitate the extraction and generation of information from text data using a graph-based approach. This system allows users to build a knowledge graph from text files and query it using natural language questions.
+## 🚀 Overview
+This project provides a pipeline for building a **Knowledge Graph**, indexing it, and performing **local search** over the indexed data. It leverages **LLM-based triplet extraction**, **semantic chunking**, and **embedding-based indexing** to enable efficient question-answering over structured knowledge in Russian language.
 
-<p align="center">
-  <img src="examples/example_of_visualization.png" width="400" height="350">
-</p>
+Partially based on [nano-graphrag](https://github.com/gusye1234/nano-graphrag/tree/main)
 
-## Features
+---
 
-- **Graph Construction**: Build a knowledge graph from the extracted text.
-- **Customizable**: Easily extendable with new chunkers and rerankers.
-- **Speed**: Less time on indexing by using special small models for NER, relation extraction and definition generating.
+## 📌 Features
+- **🔗 Build** a knowledge graph from raw text using semantic chunking and different triplet extractors.
+- **🔍 Search** the graph using a local search engine to answer queries.
 
-### !!! Getting answers on query doesn't works yet. Only graph construction
+---
 
-## Installation
+## 🛠 Installation
+Ensure you have all dependencies installed before running the script.
 
-To install RAGu, follow these steps:
+```bash
+pip install -r requirements.txt
+```
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/AsphodelRem/RAGU
-   cd RAGU
-   ```
+---
 
-2. Install the required dependencies:
-   ```bash
-   python3 -m venv .venv
-   . .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+## 📖 Usage Guide
 
-## Usage
-
-### Text Requirements
-
-- The text should be in `.txt` format.
-- The text files can be stored in nested folders.
-
-### Example of Usage
-
-Below is an example of how to use RAGu to build a knowledge graph and query it:
-
-```python
+<details>
+  <summary>🔗 Building the Knowledge Graph</summary>
+  
+  1. Load the raw text data.
+  2. Use **SmartSemanticChunker** to split the text into meaningful segments.
+  3. Extract triplets (entities, relations and its descriptions) using **TripletLLM**.
+  4. Construct the **Knowledge Graph** using **KnowledgeGraphBuilder**.
+  5. Save the graph and its community summary.
+  
+  ```python
 from ragu.utils.io_utils import read_text_from_files
-from ragu.utils.parameters import get_parameters
 from ragu.common.llm import RemoteLLM
-from ragu.graph.graph_rag import GraphRag
+from ragu.graph.graph_builder import KnowledgeGraphBuilder, KnowledgeGraph
 
+from ragu.search_engine.local_search import LocalSearchEngine
+from ragu.common.embedder import STEmbedder
+from ragu.chunker.chunkers import SmartSemanticChunker
+from ragu.triplet.triplet_makers import TripletLLM
+from ragu.common.index import Index
 
+# You can load your creditals from .env. Look into ragu/common/setting.py
 LLM_MODEL_NAME = "..."
 LLM_BASE_URL = "..."
 LLM_API_KEY = "..."
 client = RemoteLLM(LLM_MODEL_NAME, LLM_BASE_URL, LLM_API_KEY)
 
+# Getting documnets from folders with .txt files
+text = read_text_from_files('/path/to/data/folder')
 
-def main():
-    text = read_text_from_files('path/to/folder')
+# Initialize a chunker
+chunker = SmartSemanticChunker(
+      reranker_name="/path/to/reranker_model",
+      max_chunk_length=512
+)
 
-    chunker_params, triplet_params, reranker_params, generator_params, graph_params = (
-        get_parameters('configs/default_config.yaml')
-    )
-    
-    graph_rag = GraphRag(client).from_parameters(
-        chunker_params,
-        triplet_params,
-        reranker_params,
-        generator_params,
-        graph_params
-    ).build(text).save_community_summary('summary.json').save_graph('graph.gml')
+# Initialize a triplet extractor 
+artifact_extractor = TripletLLM(
+      validate=False,
+      entity_list_type='nerel',
+)
 
-    questions = [
-        "Как звали последнего Императора России?",
-        "Как звали детей последнего Императора Российской Империи?"
-    ]
+# Initialize a graph builder pipeline
+graph_builder = KnowledgeGraphBuilder(
+      client,
+      triplet_extractor=artifact_extractor,
+      chunker=chunker
+)
 
-    for question in questions:
-        print(f'Question: {question}, answer: {graph_rag.get_response(question, client)}')
+# Run building 
+knowledge_graph = graph_builder.build(text)
 
+# Save results
+knowledge_graph.save_graph("graph.gml").save_community_summary("summary.json")
+  ```
+  
+</details>
 
-if __name__ == "__main__":
-    main()
-```
+<details>
+  <summary>📌 Indexing the Graph</summary>
+  You can index graph data to use it in search engines.
 
-### Example of visualization:
-<p align="center">
-  <img src="examples/The%20House%20of%20Romanov.png" width="400" height="350">
-</p>
+  1. Load the saved knowledge graph.
+  2. Use **STEmbedder** (or your custom embedder) to create embeddings for the nodes.
+  3. Generate an index with the **Index** class.
+  
+  ```python
+  embedder = STEmbedder("/path/to/model", trust_remote_code=True)
+  index = Index(embedder=embedder)
+  index.make_index(knowledge_graph)
+  ```
+  
+</details>
 
-## Configuration
-
-The default configuration file is located at `configs/default_config.yaml`. You can customize the configuration by modifying this file or by passing additional configuration files.
-
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request or open an issue if you have any suggestions or improvements.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
-## Contact
-
-For any questions or inquiries, please contact me at asphodel.rem@gmail.com.
+<details>
+  <summary>🔍 Querying the Graph</summary>
+  
+  1. Initialize the **LocalSearchEngine** with the knowledge graph and index.
+  2. Query the graph to retrieve relevant information.
+  
+  ```python
+  local_search = LocalSearchEngine(
+      client,
+      knowledge_graph,
+      embedder, 
+      index
+)
+  
+print(local_search.query("Как звали детей последнего императора Российской Империи?"))
+  ```
+  
+</details>
 
 ---
+
+## 📝 Notes
+- Adjust chunking and triplet extraction parameters for better graph quality.
+- Use a high-quality embedding model for better indexing and retrieval performance.
+
+Happy graph-building! 🚀
+

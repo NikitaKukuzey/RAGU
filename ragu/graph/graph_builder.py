@@ -1,0 +1,456 @@
+import asyncio
+import os
+from typing import List, Tuple, Any, Hashable, Dict, Type
+from dataclasses import asdict
+
+import pandas as pd
+import networkx as nx
+from tqdm import tqdm
+
+from ragu import Chunker
+from ragu.storage.base_storage import BaseKVStorage
+from ragu.storage.json_storage import JsonKVStorage
+from ragu.triplet.base_triplet import TripletExtractor
+from ragu.common.llm import BaseLLM
+from ragu.common.types import Relation, Node, Community
+from ragu.utils.parse_json_output import extract_json
+from ragu.utils.default_prompts.artifact_summarization_prompts import artifacts_summarization_prompt
+from ragu.common.batch_generator import BatchGenerator
+from ragu.graph.knowledge_graph import KnowledgeGraph, GraphArtifacts
+from ragu.common.logger import log_outputs
+from ragu.common.global_parameters import storage_run_dir, DEFAULT_FILENAMES
+
+
+class GraphConstructor:
+    """
+    Builds a NetworkX graph from given relations.
+    """
+
+    @staticmethod
+    def build_graph(relations: List[Relation]) -> nx.Graph:
+        """
+        Build an undirected graph from a list of relations.
+
+        :param relations: List of Relation objects.
+        :return: A NetworkX graph.
+        """
+        graph = nx.Graph()
+        for relation in relations:
+            source = relation.source.entity
+            target = relation.target.entity
+
+            target_node_data = asdict(relation.target)
+            source_node_data = asdict(relation.source)
+            target_node_data.pop("entity")
+            source_node_data.pop("entity")
+
+            graph.add_node(source, **source_node_data)
+            graph.add_node(target, **target_node_data)
+            graph.add_edge(source, target, description=relation.description)
+        return graph
+
+
+class CommunitySummarizer:
+    """
+    Generates summaries for communities using an LLM client.
+    """
+    @staticmethod
+    def get_community_summaries(communities: dict,  client: BaseLLM, batch_size: int = 16, which_level: int = 0):
+        """
+        Generates summaries for different levels of community structures.
+
+        :param communities: Dictionary where keys represent hierarchy levels and values contain detected communities.
+        :param client: The LLM client used to generate summaries.
+        :param batch_size: Number of communities to process in a single batch.
+        :param which_level: Specifies the level of the hierarchy to summarize. If -1, all levels are summarized.
+        :return: Dictionary containing summaries for each processed community level.
+        """
+        if which_level == -1:
+            levels = list(communities.keys())
+        else:
+            levels = [which_level]
+
+        community_summaries = {}
+        for level in levels:
+            list_of_communities_at_level = list(communities.get(level).values())
+            community_summaries_at_level = CommunitySummarizer._generate_summary(
+                list_of_communities_at_level,
+                client,
+                batch_size
+            )
+            community_summaries[level] = community_summaries_at_level
+
+        return community_summaries
+
+    @staticmethod
+    def _generate_summary(communities: List[Community], client: BaseLLM, batch_size: int) -> List[dict]:
+        """
+        Generate summaries for each community using a language model (LLM).
+
+        This function composes a textual representation of each community (including its entities
+        and relations) and uses the LLM client to generate a summary.
+
+        :param communities: A list of Community objects to summarize.
+        :param client: An API client for interacting with the LLM.
+        :param batch_size: The batch size for processing summaries.
+        :return: A list of summaries, one for each community.
+        """
+
+        def compose_community_string(
+            entities: List[Tuple[Hashable, str]],
+            relations: List[Tuple[Hashable, Hashable, str]]
+        ) -> str:
+            """
+            Compose a textual representation of a community.
+
+            :param entities: A list of tuples containing entity names and descriptions.
+            :param relations: A list of tuples containing source, target, and relation descriptions.
+            :return: A formatted string representing the community.
+            """
+            vertices_str = ",\n".join(
+                f"Сущность: {entity}, описание: {description}" for entity, description in entities
+            )
+            relations_str = "\n".join(
+                f"{source} -> {target}, описание отношения: {description}" for source, target, description in relations
+            )
+            return f"{vertices_str}\n\nОтношения:\n{relations_str}"
+
+        from ragu.utils.default_prompts.community_summary_prompt import generate_community_report
+
+        summaries = []
+        batch_generator = BatchGenerator(communities, batch_size=batch_size)
+        for batch in tqdm(batch_generator.get_batches(), desc="Index creation: community summary", total=len(batch_generator)):
+            community_text = [compose_community_string(community.entities, community.relations) for community in batch]
+            client_response = client.generate(community_text, generate_community_report)
+            if client_response:
+                summary = [(extract_json(s)) for s in client_response]
+                summaries.extend([s for s in summary if s is not None])
+        return summaries
+
+
+class EntitySummarizer:
+    """
+    A class for summarizing entity descriptions by merging and processing them using an LLM client.
+    """
+
+    @staticmethod
+    def extract_summary(entities_df: pd.DataFrame, client: BaseLLM, batch_size: int, summarize_with_llm: bool=False) -> pd.DataFrame:
+        """
+        Extracts and summarizes entity descriptions from raw data.
+
+        :param entities_df: DataFrame containing entity data with columns 'entity_name', 'entity_type', and 'entity_description'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with summarized entity descriptions.
+        :param summarize_with_llm: Whether to summarize the entity descriptions with the LLM client.
+        :param batch_size: Number of rows to process in each batch.
+        """
+
+        merged_df = EntitySummarizer.merge_entities(entities_df)
+        return EntitySummarizer.summarize(merged_df, client, batch_size) if summarize_with_llm else merged_df
+
+    @staticmethod
+    def merge_entities(entities_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Merges entity descriptions by concatenating descriptions for each unique entity.
+
+        :param entities_df: DataFrame containing entity data with columns 'entity_name', 'entity_type', and 'entity_description'.
+        :return: DataFrame with merged entity descriptions and a count of descriptions per entity.
+        """
+        return entities_df.groupby("entity_name").agg({
+            "entity_type": "first",
+            "entity_description": " ".join,
+            "entity_name": "count",
+            "chunk_id": lambda x: list(set(x)) # Get only unique chunks id
+        }).rename(columns={"entity_name": "description_count"}).reset_index()
+
+    @staticmethod
+    def summarize(data: pd.DataFrame, client, batch_size: int) -> pd.DataFrame:
+        """
+        Summarizes entity descriptions using an LLM client if an entity has multiple descriptions.
+
+        :param data: DataFrame containing merged entity data with columns 'entity_name', 'entity_type', 'entity_description', 'description_count' and 'chunk id'.
+        :param client: LLM client used for summarization.
+        :param batch_size: Number of rows to process in each batch.
+        :return: DataFrame with updated entity descriptions after summarization.
+        """
+
+        single_desc = data[data["description_count"] == 1]
+        multi_desc = data[data["description_count"] > 1].copy()
+
+        batch_generator = BatchGenerator(multi_desc.to_dict(orient="records"), batch_size=batch_size)
+
+        responses = []
+        for batch in tqdm(
+            batch_generator.get_batches(),
+            desc="Index creation: summarizing entity descriptions",
+            total=len(batch_generator)
+        ):
+            texts = [f"Сущность: {row["entity_name"]}\nОписание: {row["entity_description"]}" for row in batch]
+            responses.extend(client.generate(texts, artifacts_summarization_prompt["summarize_entity_descriptions"]))
+
+        multi_desc.loc[:, "entity_description"] = responses
+
+        return pd.concat([single_desc, multi_desc], ignore_index=True)
+
+
+class RelationSummarizer:
+    """
+    A class for summarizing relationship descriptions by merging and processing them using an LLM client.
+    """
+
+    @staticmethod
+    def extract_summary(relationships_df: pd.DataFrame, client: Any, batch_size: int, summarize_with_llm: bool=False) -> pd.DataFrame:
+        """
+        Extracts and summarizes relationship descriptions from raw data.
+
+        :param relationships_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', 'relationship_description' and 'chunk_id'.
+        :param client: LLM client used for summarization.
+        :return: DataFrame with summarized relationship descriptions.
+        :param summarize_with_llm: Whether to summarize the relation descriptions with the LLM client.
+        :param batch_size: Number of rows to process in each batch.
+        """
+        merged_df = RelationSummarizer.merge_relationships(relationships_df)
+        return RelationSummarizer.summarize(merged_df, client, batch_size) if summarize_with_llm else merged_df
+
+    @staticmethod
+    def merge_relationships(relationships: pd.DataFrame) -> pd.DataFrame:
+        """
+        Merges relationship descriptions for each unique pair of source and target entities.
+
+        :param relationships: DataFrame containing relationship data with columns
+            'source_entity', 'target_entity', 'relationship_description' and 'chunk_id'.
+        :return: DataFrame with merged relationship descriptions and a count of descriptions per relationship pair.
+        """
+        return relationships.groupby(["source_entity", "target_entity"]).agg({
+            "relationship_description": " ".join,
+            "chunk_id": lambda x: list(set(x)) # Get only unique chunks id
+        }).assign(description_count=lambda df: df["chunk_id"].apply(len)).reset_index()
+
+    @staticmethod
+    def summarize(data: pd.DataFrame, client, batch_size: int) -> pd.DataFrame:
+        """
+        Summarizes relationship descriptions using an LLM client if a relationship has multiple descriptions.
+
+        :param data: DataFrame containing relationship data with columns
+            'source_entity', 'target_entity', 'relationship_description' and 'chunk_id'.
+        :param client: LLM client used for summarization.
+        :param batch_size: Number of rows to process in each batch.
+        :return: DataFrame with updated relationship descriptions after summarization.
+        """
+
+        single_desc = data[data["description_count"] == 1]
+        multi_desc = data[data["description_count"] > 1].copy()
+
+        batch_generator = BatchGenerator(multi_desc.to_dict(orient="records"), batch_size=batch_size)
+
+        responses = []
+        for batch in tqdm(
+                batch_generator.get_batches(),
+                desc="Index creation: summarizing relationship descriptions",
+                total=len(batch_generator)):
+            texts = [
+                f"""
+                Source entity: {row["source_entity"]}, Target entity: {row["target_entity"]}
+                Description: {row["relationship_description"]}
+                """.strip() for row in batch
+            ]
+            responses.extend(client.generate(texts, artifacts_summarization_prompt["summarize_relation_descriptions"]))
+
+        multi_desc.loc[:, "relationship_description"] = responses
+        return pd.concat([single_desc, multi_desc], ignore_index=True)
+
+
+class KnowledgeGraphBuilder:
+    """
+    A pipeline for building a knowledge graph.
+
+    :param client: BaseLLM client instance for external API calls.
+    :param batch_size: Number of elements to process in each batch.
+    :param chunker: Component responsible for splitting documents into chunks.
+    :param triplet_extractor: Component responsible for extracting triplets from chunks.
+    :param summarize_entities: Flag to enable summarization of entity descriptions.
+    :param summarize_relations: Flag to enable summarization of relationship descriptions.
+    """
+
+    def __init__(
+            self,
+            client: BaseLLM,
+            chunker: Chunker,
+            triplet_extractor: TripletExtractor,
+            batch_size: int = 16,
+            summarize_entities: bool = True,
+            summarize_relations: bool = True,
+            save_intermediate_results: bool = True,
+            kv_storage_type: Type[BaseKVStorage] = JsonKVStorage,
+            chunk_kv_storage_params: Dict[str, Any] = None,
+            community_kv_storage_params: Dict[str, Any] = None,
+            storage_folder: str = storage_run_dir,
+    ):
+        # Initialize the pipeline
+        self.client = client
+        self.batch_size = batch_size
+        self.chunker = chunker
+        self.triplet_extractor = triplet_extractor
+
+        # Set options
+        self.summarize_entities = summarize_entities
+        self.summarize_relations = summarize_relations
+        self.save_intermediate_results = save_intermediate_results
+        self.chunk_kv_storage_params = chunk_kv_storage_params if chunk_kv_storage_params else {}
+        self.community_kv_storage_params = community_kv_storage_params if community_kv_storage_params else {}
+
+        # Set key-value storage
+        self.community_kv_storage_params["filename"] = os.path.join(storage_folder, DEFAULT_FILENAMES["community_summary_kv_storage_name"])
+        self.chunk_kv_storage_params["filename"] = os.path.join(storage_folder, DEFAULT_FILENAMES["chunks_kv_storage_name"])
+
+        self.chunks_kv_storage = kv_storage_type(**self.chunk_kv_storage_params)
+        self.communities_kv_storage = kv_storage_type(**self.community_kv_storage_params)
+
+    def from_parameters(self):
+        ...
+
+    def _get_nodes(self, entities_df: pd.DataFrame) -> List[Node]:
+        """
+        Converts a DataFrame of entities into a list of Node objects.
+
+        :param entities_df: DataFrame containing entity information with columns 'entity_name' and 'entity_description'.
+        :return: List of Node objects representing entities.
+        """
+        return [
+            Node(
+                id=int(idx),
+                entity=row["entity_name"],
+                description=row["entity_description"],
+                source_chunk_id=row["chunk_id"],
+                cluster_id=-1,
+                level=-1
+            )
+            for idx, row in entities_df.iterrows()
+        ]
+
+    def _get_edges(self, relations_df: pd.DataFrame, nodes: List[Node]) -> List[Relation]:
+        """
+        Converts a DataFrame of relationships into a list of Relation objects.
+
+        :param relations_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description'.
+        :param nodes: List of Node objects used to map entities to their corresponding nodes.
+        :return: List of Relation objects representing relationships between entities.
+        """
+        entity_to_node: Dict[str, Node] = {node.entity: node for node in nodes}
+        relationships: List[Relation] = []
+
+        for _, row in relations_df.iterrows():
+            source_entity = row["source_entity"]
+            target_entity = row["target_entity"]
+            relation_desc = row["relationship_description"]
+
+            source_node = entity_to_node.get(source_entity)
+            target_node = entity_to_node.get(target_entity)
+
+            if source_node and target_node:
+                relationships.append(
+                    Relation(
+                        source=source_node,
+                        target=target_node,
+                        description=relation_desc
+                    )
+                )
+        return relationships
+
+    def build(self, documents: List[str]) -> KnowledgeGraph:
+        """
+        Builds a knowledge graph from a list of documents by chunking, extracting triplets,
+        summarizing entities and relationships, and constructing the graph.
+
+        :param documents: List of textual documents to process.
+        :return: Instance of KnowledgeGraph with the built graph and community summaries.
+        """
+        if self.chunker is None or self.triplet_extractor is None:
+            raise ValueError("Please provide all required components for building the graph.")
+
+        # Step 1: Split documents into chunks
+        chunks = self.chunker(documents)
+
+        # Step 2: Extract entities, relationships, and their descriptions
+        entities, relationships = self.triplet_extractor(chunks, client=self.client)
+
+        # Step 3: Summarize entities' and relationships' descriptions
+        summarized_entities = EntitySummarizer.extract_summary(
+            entities,
+            client=self.client,
+            batch_size=self.batch_size,
+            summarize_with_llm=self.summarize_entities
+        )
+        summarized_relationships = RelationSummarizer.extract_summary(
+            relationships,
+            client=self.client,
+            batch_size=self.batch_size,
+            summarize_with_llm=self.summarize_relations
+        )
+
+        # Step 4: Construct the graph
+        nodes = self._get_nodes(summarized_entities)
+        edges = self._get_edges(summarized_relationships, nodes)
+        graph = GraphConstructor.build_graph(edges)
+
+        knowledge_graph = KnowledgeGraph()
+        knowledge_graph.graph = graph
+
+        # Step 5: Detect communities in the graph
+        communities = knowledge_graph.detect_communities()
+
+        # Step 6: Get community summaries
+        summary = CommunitySummarizer.get_community_summaries(
+            communities=communities,
+            client=self.client,
+            batch_size=self.batch_size
+        )
+
+        knowledge_graph.community_summary = summary
+        knowledge_graph.artifacts = GraphArtifacts(
+            entities=entities,
+            relations=relationships,
+            chunks=chunks
+        )
+
+        if self.save_intermediate_results:
+            log_outputs(chunks, "chunks")
+            log_outputs(entities, "entities")
+            log_outputs(relationships, "relationships")
+            log_outputs(summarized_entities, "summarized_entities")
+            log_outputs(summarized_relationships, "summarized_relationships")
+
+        asyncio.run(self.save_artifacts(chunks, summary))
+
+        return knowledge_graph
+
+    async def save_artifacts(
+            self,
+            chunks: pd.DataFrame,
+            community_summary: Dict
+    ) -> None:
+        """
+        Saves the artifacts (chunks, entities, and relationships) of the constructed knowledge graph.
+
+        :param community_summary:
+        :param chunks: DataFrame containing chunk information.
+        """
+        if self.chunks_kv_storage is not None:
+            data_for_kv = {
+                dp["chunk_id"]: dp["chunk"]
+                for dp in chunks.to_dict("records")
+            }
+            await self.chunks_kv_storage.upsert(data_for_kv)
+
+        if self.communities_kv_storage is not None:
+            await self.communities_kv_storage.upsert(community_summary)
+
+        await self.chunks_kv_storage.index_done_callback()
+        await self.communities_kv_storage.index_done_callback()
+
+
+
+
+
+
+
