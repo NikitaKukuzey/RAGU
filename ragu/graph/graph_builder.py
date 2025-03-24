@@ -1,10 +1,15 @@
-from typing import List, Tuple, Any, Hashable, Dict
+import asyncio
+import os
+from typing import List, Tuple, Any, Hashable, Dict, Type
+from dataclasses import asdict
 
 import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 
 from ragu import Chunker
+from ragu.storage.base_storage import BaseKVStorage
+from ragu.storage.json_storage import JsonKVStorage
 from ragu.triplet.base_triplet import TripletExtractor
 from ragu.common.llm import BaseLLM
 from ragu.common.types import Relation, Node, Community
@@ -13,6 +18,7 @@ from ragu.utils.default_prompts.artifact_summarization_prompts import artifacts_
 from ragu.common.batch_generator import BatchGenerator
 from ragu.graph.knowledge_graph import KnowledgeGraph, GraphArtifacts
 from ragu.common.logger import log_outputs
+from ragu.common.global_parameters import storage_run_dir, DEFAULT_FILENAMES
 
 
 class GraphConstructor:
@@ -32,8 +38,14 @@ class GraphConstructor:
         for relation in relations:
             source = relation.source.entity
             target = relation.target.entity
-            graph.add_node(source, description=relation.source.description)
-            graph.add_node(target, description=relation.target.description)
+
+            target_node_data = asdict(relation.target)
+            source_node_data = asdict(relation.source)
+            target_node_data.pop("entity")
+            source_node_data.pop("entity")
+
+            graph.add_node(source, **source_node_data)
+            graph.add_node(target, **target_node_data)
             graph.add_edge(source, target, description=relation.description)
         return graph
 
@@ -109,9 +121,10 @@ class CommunitySummarizer:
         batch_generator = BatchGenerator(communities, batch_size=batch_size)
         for batch in tqdm(batch_generator.get_batches(), desc="Index creation: community summary", total=len(batch_generator)):
             community_text = [compose_community_string(community.entities, community.relations) for community in batch]
-            summary = client.generate(community_text, generate_community_report)
-            summary = [(extract_json(s)) for s in summary]
-            summaries.extend(summary)
+            client_response = client.generate(community_text, generate_community_report)
+            if client_response:
+                summary = [(extract_json(s)) for s in client_response]
+                summaries.extend([s for s in summary if s is not None])
         return summaries
 
 
@@ -266,14 +279,32 @@ class KnowledgeGraphBuilder:
             triplet_extractor: TripletExtractor,
             batch_size: int = 16,
             summarize_entities: bool = True,
-            summarize_relations: bool = True
+            summarize_relations: bool = True,
+            save_intermediate_results: bool = True,
+            kv_storage_type: Type[BaseKVStorage] = JsonKVStorage,
+            chunk_kv_storage_params: Dict[str, Any] = None,
+            community_kv_storage_params: Dict[str, Any] = None,
+            storage_folder: str = storage_run_dir,
     ):
+        # Initialize the pipeline
         self.client = client
         self.batch_size = batch_size
         self.chunker = chunker
         self.triplet_extractor = triplet_extractor
+
+        # Set options
         self.summarize_entities = summarize_entities
         self.summarize_relations = summarize_relations
+        self.save_intermediate_results = save_intermediate_results
+        self.chunk_kv_storage_params = chunk_kv_storage_params if chunk_kv_storage_params else {}
+        self.community_kv_storage_params = community_kv_storage_params if community_kv_storage_params else {}
+
+        # Set key-value storage
+        self.community_kv_storage_params["filename"] = os.path.join(storage_folder, DEFAULT_FILENAMES["community_summary_kv_storage_name"])
+        self.chunk_kv_storage_params["filename"] = os.path.join(storage_folder, DEFAULT_FILENAMES["chunks_kv_storage_name"])
+
+        self.chunks_kv_storage = kv_storage_type(**self.chunk_kv_storage_params)
+        self.communities_kv_storage = kv_storage_type(**self.community_kv_storage_params)
 
     def from_parameters(self):
         ...
@@ -289,7 +320,10 @@ class KnowledgeGraphBuilder:
             Node(
                 id=int(idx),
                 entity=row["entity_name"],
-                description=row["entity_description"]
+                description=row["entity_description"],
+                source_chunk_id=row["chunk_id"],
+                cluster_id=-1,
+                level=-1
             )
             for idx, row in entities_df.iterrows()
         ]
@@ -336,33 +370,27 @@ class KnowledgeGraphBuilder:
 
         # Step 1: Split documents into chunks
         chunks = self.chunker(documents)
-        log_outputs(chunks, "chunks")
 
         # Step 2: Extract entities, relationships, and their descriptions
         entities, relationships = self.triplet_extractor(chunks, client=self.client)
-        log_outputs(entities, "entities")
-        log_outputs(relationships, "relationships")
 
         # Step 3: Summarize entities' and relationships' descriptions
-        entities = EntitySummarizer.extract_summary(
+        summarized_entities = EntitySummarizer.extract_summary(
             entities,
             client=self.client,
             batch_size=self.batch_size,
             summarize_with_llm=self.summarize_entities
         )
-        relationships = RelationSummarizer.extract_summary(
+        summarized_relationships = RelationSummarizer.extract_summary(
             relationships,
             client=self.client,
             batch_size=self.batch_size,
             summarize_with_llm=self.summarize_relations
         )
 
-        log_outputs(entities, "summarized_entities")
-        log_outputs(relationships, "summarized_relationships")
-
         # Step 4: Construct the graph
-        nodes = self._get_nodes(entities)
-        edges = self._get_edges(relationships, nodes)
+        nodes = self._get_nodes(summarized_entities)
+        edges = self._get_edges(summarized_relationships, nodes)
         graph = GraphConstructor.build_graph(edges)
 
         knowledge_graph = KnowledgeGraph()
@@ -385,6 +413,44 @@ class KnowledgeGraphBuilder:
             chunks=chunks
         )
 
+        if self.save_intermediate_results:
+            log_outputs(chunks, "chunks")
+            log_outputs(entities, "entities")
+            log_outputs(relationships, "relationships")
+            log_outputs(summarized_entities, "summarized_entities")
+            log_outputs(summarized_relationships, "summarized_relationships")
+
+        asyncio.run(self.save_artifacts(chunks, summary))
+
         return knowledge_graph
+
+    async def save_artifacts(
+            self,
+            chunks: pd.DataFrame,
+            community_summary: Dict
+    ) -> None:
+        """
+        Saves the artifacts (chunks, entities, and relationships) of the constructed knowledge graph.
+
+        :param community_summary:
+        :param chunks: DataFrame containing chunk information.
+        """
+        if self.chunks_kv_storage is not None:
+            data_for_kv = {
+                dp["chunk_id"]: dp["chunk"]
+                for dp in chunks.to_dict("records")
+            }
+            await self.chunks_kv_storage.upsert(data_for_kv)
+
+        if self.communities_kv_storage is not None:
+            await self.communities_kv_storage.upsert(community_summary)
+
+        await self.chunks_kv_storage.index_done_callback()
+        await self.communities_kv_storage.index_done_callback()
+
+
+
+
+
 
 
