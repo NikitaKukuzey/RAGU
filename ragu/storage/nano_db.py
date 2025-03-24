@@ -10,7 +10,7 @@ from nano_vectordb import NanoVectorDB
 from ragu.common import BatchGenerator
 from ragu.common.embedder import BaseEmbedder
 from ragu.storage.base_storage import BaseVectorStorage
-from ragu.common.global_parameters import run_output_dir
+from ragu.common.global_parameters import storage_run_dir
 
 
 class NanoVectorDBStorage(BaseVectorStorage):
@@ -19,12 +19,13 @@ class NanoVectorDBStorage(BaseVectorStorage):
             embedder: BaseEmbedder,
             batch_size: int=16,
             cosine_threshold: float = 0.2,
+            storage_folder: str = storage_run_dir,
             filename: str="data.json",
             **kwargs
     ):
         super().__init__(**kwargs)
 
-        self.filename = os.path.join(run_output_dir, filename)
+        self.filename = os.path.join(storage_folder, filename)
         self.batch_size = batch_size
         self.embedder = embedder
         self.cosine_threshold = cosine_threshold

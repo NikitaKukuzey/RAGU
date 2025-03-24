@@ -3,13 +3,13 @@
 import os
 import json
 
-from ragu.common.global_parameters import run_output_dir
+from ragu.common.global_parameters import storage_run_dir
 from ragu.storage.base_storage import BaseKVStorage
 
 
 class JsonKVStorage(BaseKVStorage):
-    def __init__(self, filename: str="kv_store.json"):
-        self.filename = os.path.join(run_output_dir, filename)
+    def __init__(self, storage_folder: str=storage_run_dir, filename: str="kv_store.json"):
+        self.filename = os.path.join(storage_folder, filename)
         if not os.path.exists(self.filename):
             self.data = {}
             with open(self.filename, "w", encoding="utf-8") as f:
