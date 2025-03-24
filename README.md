@@ -62,7 +62,9 @@ chunker = SmartSemanticChunker(
 # Initialize a triplet extractor 
 artifact_extractor = TripletLLM(
       validate=False,
-      entity_list_type='nerel',
+      # Also you can set your own entity types as a list (and others arguments)
+      # entity_list_type=[your entity types],
+      # batch_size=16
 )
 
 # Initialize a graph builder pipeline
