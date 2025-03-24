@@ -65,16 +65,18 @@ class TripletLLM(TripletExtractor):
         entities, relations = [], []
         text_df = chunks_df["chunk"]
         chunks_id_df = chunks_df["chunk_id"]
-        batch_generator = BatchGenerator(text_df.tolist(), batch_size=self.batch_size)
+        batch_generator = BatchGenerator(list(zip(text_df.tolist(), chunks_id_df.tolist())), batch_size=self.batch_size)
 
         for batch_idx, batch in tqdm(
             enumerate(batch_generator.get_batches()),
             desc="Index creation: extracting entities and relationships",
             total=len(batch_generator)
         ):
-            raw_data = self._get_batched_raw_entities_and_relations(batch, client)
+            text = [row[0] for row in batch]
+            chunks_id = [row[1] for row in batch]
+            raw_data = self._get_batched_raw_entities_and_relations(text, client)
             parsed_batch = self._parse_llm_response(raw_data)
-            self._process_parsed_batch(parsed_batch, chunks_id_df, entities, relations)
+            self._process_parsed_batch(parsed_batch, chunks_id, entities, relations)
 
         return self._finalize_dataframes(entities, relations)
 
@@ -92,7 +94,7 @@ class TripletLLM(TripletExtractor):
     def _process_parsed_batch(
         self,
         parsed_batch: List[Tuple[pd.DataFrame, pd.DataFrame]],
-        chunks_id_df: pd.DataFrame,
+        chunks_id: list,
         entities: List[pd.DataFrame],
         relations: List[pd.DataFrame]
     ) -> None:
@@ -104,8 +106,8 @@ class TripletLLM(TripletExtractor):
         :param relations: List to accumulate relationship DataFrames
         """
         for i, (entity_df, relation_df) in enumerate(parsed_batch):
-            entity_df["chunk_id"] = chunks_id_df.iloc[i]
-            relation_df["chunk_id"] = chunks_id_df.iloc[i]
+            entity_df["chunk_id"] = chunks_id[i]
+            relation_df["chunk_id"] = chunks_id[i]
 
             entities.append(entity_df)
             relations.append(relation_df)
