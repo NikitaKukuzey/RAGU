@@ -19,8 +19,7 @@ class Node:
     entity: str
     description: str
     source_chunk_id: list[str]
-    cluster_id: int
-    level: int
+    clusters: list
 
 
 @dataclass
