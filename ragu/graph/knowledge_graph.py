@@ -1,20 +1,24 @@
 import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import  Optional, Dict
+from typing import Optional, Dict, Union
 
 import networkx as nx
 import pandas as pd
 from graspologic.partition import HierarchicalClusters, hierarchical_leiden
 from pyvis.network import Network
 
+from ragu.common.global_parameters import run_output_dir
 from ragu.common.types import Community
+
 
 @dataclass
 class GraphArtifacts:
     chunks: pd.DataFrame
     entities: pd.DataFrame
     relations: pd.DataFrame
+
 
 class KnowledgeGraph:
     """
@@ -152,7 +156,7 @@ class KnowledgeGraph:
             node = partition.node
 
             self.graph.nodes[node]["level"] = level
-            self.graph.nodes[node]["cluster"] = cluster_id
+            self.graph.nodes[node]["cluster_id"] = cluster_id
 
             clusters[level][cluster_id]["nodes"].add(node)
 
@@ -185,7 +189,29 @@ class KnowledgeGraph:
 
                 communities[level][cluster_id] = Community(
                     entities=entities,
-                    relations=relations
+                    relations=relations,
+                    level=level,
+                    cluster_id=cluster_id,
                 )
 
         return dict(communities)
+
+    def has_node(self, node_id: str) -> bool:
+        return self.graph.has_node(node_id)
+
+    def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
+        return self.graph.has_edge(source_node_id, target_node_id)
+
+    def get_node(self, node_id: str) -> Union[dict, None]:
+        return self.graph.nodes.get(node_id)
+
+    def node_degree(self, node_id: str) -> int:
+        return self.graph.degree(node_id) if self.graph.has_node(node_id) else 0
+
+    def edge_degree(self, source_node_id: str, target_node_id: str) -> int:
+        return (self.graph.degree(source_node_id) if self.graph.has_node(source_node_id) else 0) + (
+            self.graph.degree(target_node_id) if self.graph.has_node(target_node_id) else 0
+        )
+
+    def get_edge(self, source_node_id: str, target_node_id: str) -> Union[dict, None]:
+        return self.graph.edges.get((source_node_id, target_node_id))
