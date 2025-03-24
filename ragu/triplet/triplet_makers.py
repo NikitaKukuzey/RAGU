@@ -1,4 +1,6 @@
 import logging
+from os import system
+
 import requests
 import pandas as pd
 from typing import List, Tuple
@@ -9,6 +11,9 @@ from ragu.common.llm import BaseLLM
 from ragu.common.decorator import no_throw
 from ragu.common.batch_generator import BatchGenerator
 from ragu.triplet.base_triplet import TripletExtractor
+from ragu.utils.default_prompts.triplet_maker_prompts import original_like_prompt, delimiters
+from ragu.utils.default_prompts.triplet_maker_prompts import prompts, nerel_entities
+from ragu.utils.default_prompts.triplet_maker_prompts import validation_prompts
 from ragu.utils.parse_json_output import extract_json
 
 
@@ -18,12 +23,12 @@ class TripletLLM(TripletExtractor):
     Extracts entities and relationships from text using LLM with absolute chunk indexing.
     """
     ENTITY_COLUMNS = ["entity_name", "entity_type", "entity_description", "chunk_id"]
-    RELATION_COLUMNS = ["source_entity", "target_entity", "relationship_description", "chunk_id"]
+    RELATION_COLUMNS = ["source_entity", "target_entity", "relationship_description", "relationship_strength", "chunk_id"]
 
     def __init__(
         self,
-        entity_list_type: str,
-        batch_size: int,
+        entity_list: list=nerel_entities,
+        batch_size: int=16,
         validate: bool=False,
     ):
         """
@@ -33,15 +38,12 @@ class TripletLLM(TripletExtractor):
         :param entity_list_type: Type of entities to extract
         :param batch_size: Number of texts to process per batch
         """
-        from ragu.utils.default_prompts.triplet_maker_prompts import prompts
-        from ragu.utils.default_prompts.triplet_maker_prompts import validation_prompts
 
         super().__init__()
         self.validate = validate
         self.batch_size = batch_size
-        self.entity_list_type = entity_list_type
-        self.system_prompts = prompts[self.entity_list_type]
-        self.validation_system_prompts = validation_prompts[self.entity_list_type]
+        self.entity_list = entity_list
+        self.validation_system_prompts = "" # validation_prompts[self.entity_list_type]
 
     def extract_entities_and_relationships(
         self,
@@ -88,7 +90,8 @@ class TripletLLM(TripletExtractor):
         :param client: LLM client instance
         :return: Raw LLM responses for the batch
         """
-        raw_data = client.generate(batch, self.system_prompts)
+        system_prompt = original_like_prompt.format(entity_types=self.entity_list, **delimiters)
+        raw_data = client.generate(batch, system_prompt)
         return self.validate_triplets(batch, raw_data, client) if self.validate else raw_data
 
     def _process_parsed_batch(
@@ -159,7 +162,7 @@ class TripletLLM(TripletExtractor):
         return client.generate(validation_inputs, self.validation_system_prompts)
 
     @no_throw
-    def _parse_llm_response(self, batched_raw_data: List[str]) -> List[Tuple[pd.DataFrame, pd.DataFrame]]:
+    def _parse_llm_response(self, batched_raw_data: List[str], parsed_func_type: str="custom_parser") -> List[Tuple[pd.DataFrame, pd.DataFrame]]:
         """
         Parses individual LLM responses while handling errors.
 
@@ -167,20 +170,55 @@ class TripletLLM(TripletExtractor):
         :return: List of parsed (entities, relationships) DataFrames
         """
 
+        if parsed_func_type == "json":
+            parse_func = extract_json
+        if parsed_func_type == "custom_parser":
+            parse_func = self.parse_text
+        else:
+            logging.error("Unknown parsed_func_type")
+            parse_func = self.parse_text
+
         parsed_batch = []
         for raw in batched_raw_data:
             try:
-                data = extract_json(raw)
-                entities = pd.DataFrame(data["entities"])
-                relations = pd.DataFrame(data["relationships"])
+                data = parse_func(raw)
+                entities = pd.DataFrame(data["entities"], columns=self.ENTITY_COLUMNS[:-1])
+                relations = pd.DataFrame(data["relationships"], columns=self.RELATION_COLUMNS[:-1])
             except Exception as e:
                 logging.error(f"Parse error: {e}\nRaw data: {raw}")
                 entities = pd.DataFrame(columns=self.ENTITY_COLUMNS[:-1])
                 relations = pd.DataFrame(columns=self.RELATION_COLUMNS[:-1])
             finally:
                 parsed_batch.append((entities, relations))
-
         return parsed_batch
+
+    @no_throw
+    def parse_text(
+            self,
+            text: str,
+            section_delimiter: str=delimiters["section_delimiter"],
+            tuple_delimiter: str=delimiters["tuple_delimiter"],
+            record_delimiter: str=delimiters["record_delimiter"]
+    ):
+        sections = text.strip().split(section_delimiter)
+        sections = [s for s in sections if s != ""]
+
+        entities, relations = [], []
+        for section in filter(None, sections):
+            lines = filter(None, section.strip().split(record_delimiter))
+            for line in lines:
+                line = line.strip().strip("()")
+                parts = line.split(tuple_delimiter)
+                parts = [p.strip("\"\"") for p in parts]
+
+                if not parts or len(parts) < 4:
+                    continue
+                if parts[0] == "entity":
+                    entities.append((parts[1], parts[2], parts[3]))
+                elif parts[0] == "relationship" and len(parts) == 5:
+                    relations.append((parts[1], parts[2], parts[3], int(parts[4])))
+
+        return {"entities": entities, "relationships": relations}
 
 
 # TODO: add relation extraction and definition generation
