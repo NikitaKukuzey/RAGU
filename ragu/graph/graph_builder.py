@@ -322,8 +322,7 @@ class KnowledgeGraphBuilder:
                 entity=row["entity_name"],
                 description=row["entity_description"],
                 source_chunk_id=row["chunk_id"],
-                cluster_id=-1,
-                level=-1
+                clusters=[],
             )
             for idx, row in entities_df.iterrows()
         ]
