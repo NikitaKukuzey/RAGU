@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 import numpy as np
 from nano_vectordb import NanoVectorDB
 
-from ragu.common import BatchGenerator
+from ragu.common.batch_generator import BatchGenerator
 from ragu.common.embedder import BaseEmbedder
 from ragu.storage.base_storage import BaseVectorStorage
 from ragu.common.global_parameters import storage_run_dir
