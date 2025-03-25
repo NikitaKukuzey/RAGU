@@ -99,7 +99,7 @@ class RemoteLLM(BaseLLM):
         :return: A response string if input is a string, otherwise a list of response strings.
         """
         if isinstance(queries, str):
-            return self._get_response(queries, system_prompt, **kwargs)
+            queries = [queries]
 
         return [
             response
@@ -204,5 +204,5 @@ class VLLMClient(BaseLLM):
         except Exception as e:
             ...
 
-        return responses[0] if len(responses) == 1 else responses
+        return responses
 

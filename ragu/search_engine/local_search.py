@@ -93,4 +93,4 @@ class LocalSearchEngine(BaseEngine):
         return self.client.generate(
             query_prompts.format(query=query, context=context),
             system_prompt
-        )
+        )[0]
