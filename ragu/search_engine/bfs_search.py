@@ -70,7 +70,7 @@ class BFSEngine(BaseEngine):
 
         sys_prompt = "Ты - полезный ассистент. Ответь на запрос по предоставленному контексту."
         user_prompt = f"Запрос:\n{query}\n\nКонтекст:\n{context}"
-        return self.client.generate(user_prompt, sys_prompt)
+        return self.client.generate(user_prompt, sys_prompt)[0]
 
     @staticmethod
     def _get_all_possible_entities(entities: List[str]):

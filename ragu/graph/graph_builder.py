@@ -250,8 +250,8 @@ class RelationSummarizer:
                 total=len(batch_generator)):
             texts = [
                 f"""
-                Source entity: {row["source_entity"]}, Target entity: {row["target_entity"]}
-                Description: {row["relationship_description"]}
+                Сущность: {row["source_entity"]}, Целевая сущность: {row["target_entity"]}
+                Описание: {row["relationship_description"]}
                 """.strip() for row in batch
             ]
             responses.extend(client.generate(texts, artifacts_summarization_prompt["summarize_relation_descriptions"]))
