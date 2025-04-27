@@ -1,1 +1,0 @@
-from ragu.generate.base_generator import Generator
