@@ -1,4 +1,3 @@
-import logging
 from os import system
 
 import requests
@@ -15,6 +14,7 @@ from ragu.utils.default_prompts.triplet_maker_prompts import original_like_promp
 from ragu.utils.default_prompts.triplet_maker_prompts import prompts, nerel_entities
 from ragu.utils.default_prompts.triplet_maker_prompts import validation_prompts
 from ragu.utils.parse_json_output import extract_json
+from ragu.common.logger import logging
 
 
 @TripletExtractor.register("original")
@@ -22,7 +22,7 @@ class TripletLLM(TripletExtractor):
     """
     Extracts entities and relationships from text using LLM with absolute chunk indexing.
     """
-    ENTITY_COLUMNS = ["entity_name", "entity_type", "entity_description", "chunk_id"]
+    ENTITY_COLUMNS = ["entity_name", "entity_type", "description", "chunk_id"]
     RELATION_COLUMNS = ["source_entity", "target_entity", "relationship_description", "relationship_strength", "chunk_id"]
 
     def __init__(
@@ -105,7 +105,7 @@ class TripletLLM(TripletExtractor):
         Processes parsed batch data with absolute indexing.
 
         :param parsed_batch: Parsed data from current batch
-        :param entities: List to accumulate entity DataFrames
+        :param entities: List to accumulate entity_name DataFrames
         :param relations: List to accumulate relationship DataFrames
         """
         for i, (entity_df, relation_df) in enumerate(parsed_batch):
@@ -123,7 +123,7 @@ class TripletLLM(TripletExtractor):
         """
         Creates final output DataFrames from accumulated results.
 
-        :param entities: List of entity DataFrames
+        :param entities: List of entity_name DataFrames
         :param relations: List of relationship DataFrames
         :return: Tuple of concatenated DataFrames
         """
@@ -213,7 +213,7 @@ class TripletLLM(TripletExtractor):
 
                 if not parts or len(parts) < 4:
                     continue
-                if parts[0] == "entity":
+                if parts[0] == "entity_name":
                     entities.append((parts[1], parts[2], parts[3]))
                 elif parts[0] == "relationship" and len(parts) == 5:
                     relations.append((parts[1], parts[2], parts[3], int(parts[4])))
@@ -229,13 +229,13 @@ class ComposedTripletExtractor(TripletExtractor):
         self.entity_list_type = entity_list_type
         self.ner_url = ner_url
 
-        # Use english version of the dictionary because bond_005 NER returns only English entity types
+        # Use english version of the dictionary because bond_005 NER returns only English entity_name types
         from ragu.utils.default_prompts.triplet_maker_prompts import english_entities_dict
         self.valid_entities = english_entities_dict.get(entity_list_type, set())
 
     def extract_entities_and_relationships(self, texts: List[str], *args, **kwargs) -> pd.DataFrame:
         """
-        Extract entities from a list of texts using a named entity recognition (NER) API.
+        Extract entities from a list of texts using a named entity_name recognition (NER) API.
         """
         extracted_entities = []
         for i, text_chunk in tqdm(enumerate(texts), desc="Index creation: extracting entities and relationships", total=len(texts)):
@@ -244,7 +244,7 @@ class ComposedTripletExtractor(TripletExtractor):
             extracted_entities.append(entities_df)
 
         return pd.concat(extracted_entities, ignore_index=True) if extracted_entities \
-            else pd.DataFrame(columns=["entity", "entity_type", "start", "end", "chunk_id"])
+            else pd.DataFrame(columns=["entity_name", "entity_type", "start", "end", "chunk_id"])
 
     def request_ner(self, text: str) -> pd.DataFrame:
         """
@@ -256,7 +256,7 @@ class ComposedTripletExtractor(TripletExtractor):
             entities = response.json().get("ners", [])
         except requests.RequestException as e:
             logging.error(f"NER request failed: {e}")
-            return pd.DataFrame(columns=["entity", "entity_type"])
+            return pd.DataFrame(columns=["entity_name", "entity_type"])
 
         data = [(text[start:end], ent_type, start, end) for start, end, ent_type in entities if ent_type in self.valid_entities]
-        return pd.DataFrame(data, columns=["entity", "entity_type", "start", "end"])
+        return pd.DataFrame(data, columns=["entity_name", "entity_type", "start", "end"])
