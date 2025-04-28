@@ -9,7 +9,7 @@ prompt = """
     Под нормализацией подразумевается приведение слова к начальной форме. 
     Пример: рождеству -> Рождество, кошек -> Кошки, Павла -> Павел.
    - **entity_type**: Тип сущности. Допустимые типы: {allowed_entity_types}
-   - **entity_description**: Подробное описание сущности по приведенному тексту. Описание должно быть точным и максимально полным. 
+   - **description**: Подробное описание сущности по приведенному тексту. Описание должно быть точным и максимально полным. 
 
 2. **Определение связей между сущностями.**  
    На основе сущностей, найденных на первом шаге, определить все пары (**source_entity**, **target_entity**), которые *явно связаны* между собой.  
@@ -25,7 +25,7 @@ prompt = """
         {{
             "entity_name": "<название сущности>",
             "entity_type": "<тип сущности>",
-            "entity_description": "<описание сущности>"
+            "description": "<описание сущности>"
         }}
     ],
     "relationships": [
@@ -63,7 +63,7 @@ validation_prompt = """
         {{
             "entity_name": "<название сущности>",
             "entity_type": "<тип сущности>",
-            "entity_description": "<описание сущности>"
+            "description": "<описание сущности>"
         }}
     ],
     "relationships": [
@@ -90,9 +90,9 @@ original_like_prompt = """
    Для каждой найденной сущности извлеките следующую информацию:  
    - **entity_name**: Название сущности с заглавной буквы.  
    - **entity_type**: Один из следующих типов: [{entity_types}].  
-   - **entity_description**: Полное описание характеристик и деятельности сущности.  
+   - **description**: Полное описание характеристик и деятельности сущности.  
    Отформатируйте каждую сущность следующим образом:  
-   ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+   ("entity_name"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<description>)
 
 2. **Определение всех связанных пар (source_entity, target_entity) среди найденных сущностей.**  
    Для каждой пары связанных сущностей извлеките следующую информацию:  
@@ -105,7 +105,7 @@ original_like_prompt = """
 
 3. **Верни результат на английском языке** в виде единого списка всех сущностей и отношений, выявленных на шагах 1 и 2.  
    Используй **{record_delimiter}** в качестве разделителя списка.  
-
+z
 4. Разделяй блоки сущностей и связей разделителем **{section_delimiter}**. Поставь его в начале блока сущностей, после блока сущностей и после блока отношений
 
 ######################  
@@ -123,11 +123,11 @@ original_like_prompt = """
 
 **Выходные данные:**
 {section_delimiter}  
-("entity"{tuple_delimiter}"Алекс"{tuple_delimiter}"person"{tuple_delimiter}"Алекс испытывает раздражение и наблюдает за динамикой между другими персонажами."){record_delimiter}  
-("entity"{tuple_delimiter}"Тейлор"{tuple_delimiter}"person"{tuple_delimiter}"Тейлор демонстрирует авторитарную уверенность и проявляет благоговение перед устройством, что говорит о перемене его точки зрения."){record_delimiter}  
-("entity"{tuple_delimiter}"Джордан"{tuple_delimiter}"person"{tuple_delimiter}"Джордан предан идее открытия и взаимодействует с Тейлором по поводу устройства."){record_delimiter}  
-("entity"{tuple_delimiter}"Круз"{tuple_delimiter}"person"{tuple_delimiter}"Круз придерживается видения контроля и порядка, влияя на других персонажей."){record_delimiter}  
-("entity"{tuple_delimiter}"Устройство"{tuple_delimiter}"technology"{tuple_delimiter}"Устройство является ключевым элементом истории, обладая потенциалом изменить правила игры."){record_delimiter}  
+("entity_name"{tuple_delimiter}"Алекс"{tuple_delimiter}"person"{tuple_delimiter}"Алекс испытывает раздражение и наблюдает за динамикой между другими персонажами."){record_delimiter}  
+("entity_name"{tuple_delimiter}"Тейлор"{tuple_delimiter}"person"{tuple_delimiter}"Тейлор демонстрирует авторитарную уверенность и проявляет благоговение перед устройством, что говорит о перемене его точки зрения."){record_delimiter}  
+("entity_name"{tuple_delimiter}"Джордан"{tuple_delimiter}"person"{tuple_delimiter}"Джордан предан идее открытия и взаимодействует с Тейлором по поводу устройства."){record_delimiter}  
+("entity_name"{tuple_delimiter}"Круз"{tuple_delimiter}"person"{tuple_delimiter}"Круз придерживается видения контроля и порядка, влияя на других персонажей."){record_delimiter}  
+("entity_name"{tuple_delimiter}"Устройство"{tuple_delimiter}"technology"{tuple_delimiter}"Устройство является ключевым элементом истории, обладая потенциалом изменить правила игры."){record_delimiter}  
 {section_delimiter}
 ("relationship"{tuple_delimiter}"Алекс"{tuple_delimiter}"Тейлор"{tuple_delimiter}"Алекс подвержен влиянию авторитарной уверенности Тейлора и замечает изменения в его отношении к устройству."{tuple_delimiter}7){record_delimiter}  
 ("relationship"{tuple_delimiter}"Алекс"{tuple_delimiter}"Джордан"{tuple_delimiter}"Алекс и Джордан разделяют стремление к открытиям, что контрастирует с видением Круза."{tuple_delimiter}6){record_delimiter}  
