@@ -2,15 +2,16 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, cast
 
 import networkx as nx
 import pandas as pd
 from graspologic.partition import HierarchicalClusters, hierarchical_leiden
+from graspologic.utils import largest_connected_component
 from pyvis.network import Network
 
 from ragu.common.global_parameters import run_output_dir
-from ragu.common.types import Community
+from ragu.graph.types import Community
 
 
 @dataclass
@@ -124,40 +125,27 @@ class KnowledgeGraph:
 
         return self
 
-    def detect_communities(self) -> Dict[int, Dict[int, Community]]:
+    def detect_communities(self, max_cluster_size: int=5) -> list[Community]:
         """
         Detect hierarchical communities in a graph using the Leiden algorithm.
 
         This function identifies communities at multiple hierarchical levels and returns
         a nested dictionary containing nodes and edges for each community at every level.
-
-        :return: A nested dictionary where:
-                 - The outer key is the hierarchy level (int).
-                 - The inner key is the cluster ID (int).
-                 - The value is a Community object containing nodes and edges for the cluster.
-                 Example:
-                 {
-                     level_1: {
-                         cluster_id_1: Community(...),
-                         cluster_id_2: Community(...)
-                     },
-                     level_2: {
-                         cluster_id_1: Community(...)
-                     }
-                 }
         """
-        community_mapping: HierarchicalClusters = hierarchical_leiden(self.graph)
+        community_mapping: HierarchicalClusters = hierarchical_leiden(
+            self.graph,
+            max_cluster_size=max_cluster_size,
+        )
 
         # Structure: level -> cluster_id -> (nodes, edges)
+        communities: list[Community] = []
         clusters = defaultdict(lambda: defaultdict(lambda: {"nodes": set(), "edges": set()}))
         for partition in community_mapping:
             level = partition.level
             cluster_id = partition.cluster
             node = partition.node
 
-            self.graph.nodes[node]["clusters"].append(
-                {"level": level, "cluster_id": cluster_id}
-            )
+            self.graph.nodes[node]["clusters"].append({"level": level, "cluster_id": cluster_id})
 
             clusters[level][cluster_id]["nodes"].add(node)
 
@@ -165,11 +153,15 @@ class KnowledgeGraph:
                 if neighbor in clusters[level][cluster_id]["nodes"]:
                     edge_data = self.graph.get_edge_data(node, neighbor)
                     clusters[level][cluster_id]["edges"].add(
-                        (node, neighbor, edge_data.get("description", ""))
+                        (
+                            node,
+                            neighbor,
+                            edge_data.get("description", "")
+                        )
                     )
 
         # Convert to Community objects
-        communities: Dict[int, Dict[int, Community]] = defaultdict(dict)
+        communities: list[Community] = []
 
         for level in clusters:
             for cluster_id in clusters[level]:
@@ -183,19 +175,18 @@ class KnowledgeGraph:
                     for node, data in subgraph.nodes(data=True)
                 ]
 
-                relations = [
-                    (u, v, desc)
-                    for u, v, desc in edges
-                ]
+                relations = [(u, v, desc)for u, v, desc in edges]
 
-                communities[level][cluster_id] = Community(
-                    entities=entities,
-                    relations=relations,
-                    level=level,
-                    cluster_id=cluster_id,
+                communities.append(
+                    Community(
+                        entities=entities,
+                        relations=relations,
+                        level=level,
+                        cluster_id=cluster_id,
+                    )
                 )
 
-        return dict(communities)
+        return communities
 
     def has_node(self, node_id: str) -> bool:
         return self.graph.has_node(node_id)
@@ -216,3 +207,14 @@ class KnowledgeGraph:
 
     def get_edge(self, source_node_id: str, target_node_id: str) -> Union[dict, None]:
         return self.graph.edges.get((source_node_id, target_node_id))
+
+    def take_stable_largest_connected_component(self) -> "KnowledgeGraph":
+        self.graph = largest_connected_component(self.graph)
+        return self
+
+    def remove_isolated_nodes(self) -> "KnowledgeGraph":
+        for node in list(self.graph.nodes):
+            if self.graph.degree(node) == 0:
+                self.graph.remove_node(node)
+        return self
+
