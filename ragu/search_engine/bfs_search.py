@@ -78,7 +78,7 @@ class BFSEngine(BaseEngine):
         Generates all possible combinations of entities.
 
         :param entities: List of entities.
-        :return: A list of all possible entity combinations.
+        :return: A list of all possible entity_name combinations.
         """
 
         unique_phrases = set()
@@ -99,7 +99,7 @@ class BFSEngine(BaseEngine):
 
         :param query: The input query.
         :type query: str
-        :return: A list of extracted entity names.
+        :return: A list of extracted entity_name names.
         """
         entities, _ = self.artifacts_extractor.extract_entities_and_relationships([query], client=self.client)
         entities = entities.drop_duplicates('entity_name')
@@ -123,7 +123,6 @@ class BFSEngine(BaseEngine):
         edges_list = []
         visited = set()
 
-        print(query_entities)
         queue = [(entity, 0) for entity in query_entities if entity in graph]
         while queue:
             current, depth = queue.pop(0)

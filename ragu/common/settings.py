@@ -1,7 +1,10 @@
+from dataclasses import dataclass
+from typing import AnyStr, Any
+
 from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+class Env(BaseSettings):
     """
     A configuration class that loads settings from environment variables using Pydantic.
 

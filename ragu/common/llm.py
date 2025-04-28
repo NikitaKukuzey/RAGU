@@ -1,4 +1,5 @@
 import importlib.util
+from http.client import responses
 
 from openai import OpenAI
 from ragu.common.decorator import no_throw
@@ -32,7 +33,7 @@ class LocalLLM(BaseLLM):
         if spec is not None:
             transformers = importlib.import_module("transformers")
         else:
-            raise ImportError("transformers is not installed. Please install it using pip install transformers or compile from source.")
+            raise ImportError("transformers is not installed. Please install it using pip install transformers or compile from source_entity.")
 
         from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
@@ -88,10 +89,17 @@ class RemoteLLM(BaseLLM):
         self.client = OpenAI(base_url=base_url, api_key=api_token, **kwargs)
 
     @no_throw
-    def generate(self, queries: str | list[str], system_prompt: str, model_name: str = None, **kwargs):
+    def generate(
+            self,
+            queries: str | list[str],
+            system_prompt: str,
+            model_name: str = None,
+            **kwargs
+    ):
         """
         Generates a response from the LLM based on user queries.
 
+        :param remove_none:
         :param queries: A single query string or a list of query strings.
         :param system_prompt: System-level prompt to provide context.
         :param model_name: Optional model name override.
@@ -101,11 +109,7 @@ class RemoteLLM(BaseLLM):
         if isinstance(queries, str):
             queries = [queries]
 
-        return [
-            response
-            for query in queries
-            if (response := self._get_response(query, system_prompt, **kwargs))
-        ]
+        return [self._get_response(query, system_prompt, **kwargs) for query in queries]
 
     def _get_response(self, query: str, system_prompt: str, **kwargs):
         """
@@ -167,7 +171,7 @@ class VLLMClient(BaseLLM):
         if spec is not None:
             vllm = importlib.import_module("vllm")
         else:
-            raise ImportError("vLLM is not installed. Please install it using pip install vllm or compile from source.")
+            raise ImportError("vLLM is not installed. Please install it using pip install vllm or compile from source_entity.")
 
         self.engine = vllm.LLM(
             model=model_name,
@@ -177,10 +181,11 @@ class VLLMClient(BaseLLM):
         self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048}))
 
     @no_throw
-    def generate(self, queries: str | list[str], system_prompt: str, **kwargs):
+    def generate(self, queries: str | list[str], system_prompt: str, remove_none: bool = True, **kwargs):
         """
         Generates responses from the vLLM model based on user queries.
 
+        :param remove_none:
         :param queries: A single query string or a list of query strings.
         :param system_prompt: System-level prompt to provide context.
         :param kwargs: Additional keyword arguments for the API request.
@@ -205,4 +210,3 @@ class VLLMClient(BaseLLM):
             ...
 
         return responses
-

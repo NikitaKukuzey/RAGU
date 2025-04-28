@@ -2,6 +2,7 @@ import re
 import json
 
 
+from ragu.common.logger import ragu_logger
 from ragu.common.decorator import no_throw
 
 
@@ -12,7 +13,7 @@ def extract_json(text: str):
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
-            pass
+            ragu_logger.warning(f"Bad JSON: {text}")
     return None
 
 

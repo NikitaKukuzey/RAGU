@@ -1,6 +1,7 @@
 # Based on https://github.com/gusye1234/nano-graphrag/blob/main/nano_graphrag/
 
 from collections import Counter
+from ragu.utils.parse_json_output import combine_report_text
 
 
 async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
@@ -20,7 +21,7 @@ async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
     all_edges_degree = [knowledge_graph.edge_degree(e[0], e[1]) for e in all_edges]
 
     all_edges_data = [
-        {"source": k[0], "target": k[1], "rank": d, **v}
+        {"source_entity": k[0], "target_entity": k[1], "rank": d, **v}
         for k, v, d in zip(all_edges, all_edges_pack, all_edges_degree)
         if v is not None
     ]
@@ -29,6 +30,7 @@ async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
     )
 
     return all_edges_data
+
 
 async def _find_most_related_text_unit_from_entities(node_datas, chunks_db, knowledge_graph):
     text_units_id = []
@@ -79,35 +81,32 @@ async def _find_most_related_text_unit_from_entities(node_datas, chunks_db, know
     return all_text_units
 
 
-async def _find_most_related_community_from_entities(node_datas: list, community_report_bd, level: int = 0):
-        related_communities = []
-        for node_d in node_datas:
-            if "cluster_id" not in node_d:
-                continue
-            related_communities.append({"cluster": node_d["cluster_id"], "level": node_d["level"]})
+async def _find_most_related_community_from_entities(node_datas: list, community_report_bd, level: int = 2):
+    related_communities = []
+    for node in node_datas:
+        if node["clusters"]:
+            for cluster in node["clusters"]:
+                if cluster not in related_communities:
+                    related_communities.append(cluster)
 
-        related_community_dup_keys = [
-            str(dp["cluster"])
-            for dp in related_communities
-            if dp["level"] <= level
-        ]
-        related_community_keys_counts = dict(Counter(related_community_dup_keys))
-        _related_community_datas = [await community_report_bd.get_by_id(k) for k in related_community_keys_counts.keys()]
-        related_community_datas = {
-            k: v
-            for k, v in zip(related_community_keys_counts.keys(), _related_community_datas)
-            if v is not None
-        }
-        related_community_keys = sorted(
-            related_community_keys_counts.keys(),
-            key=lambda k: (
-                related_community_keys_counts[k],
-                related_community_datas[k]["report_json"].get("rating", -1),
-            ),
-            reverse=True,
-        )
-        sorted_community_datas = [
-            related_community_datas[k] for k in related_community_keys
-        ]
+    related_communities = list(filter(lambda dp: dp["level"] <= level, related_communities))
+    related_community_data = [
+        await community_report_bd.get_by_id(str(cluster_data["cluster_id"]))
+        for cluster_data in related_communities
+    ]
 
-        return sorted_community_datas
+    related_community_data = [
+        community for community in related_community_data if community and community["community_report"] is not None
+    ]
+
+    related_community_data = sorted(
+        related_community_data,
+        key=lambda x: x["community_report"].get("rating", -1),
+        reverse=True
+    )
+
+    sorted_community_datas = [
+        combine_report_text(community["community_report"]) for community in related_community_data
+    ]
+
+    return sorted_community_datas

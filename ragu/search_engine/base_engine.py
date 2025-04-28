@@ -6,7 +6,7 @@ class BaseEngine(ABC):
         ...
 
     @abstractmethod
-    def build_index(self, ):
+    def build_index(self):
         """
         Build index for knowledge graph
         """
