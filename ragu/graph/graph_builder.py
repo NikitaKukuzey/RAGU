@@ -447,6 +447,10 @@ class KnowledgeGraphBuilder:
         knowledge_graph = KnowledgeGraph()
         knowledge_graph.graph = graph
 
+        knowledge_graph.save_graph(
+            os.path.join(storage_run_dir, DEFAULT_FILENAMES["graph_name"])  # type: ignore
+        )
+
         if self.remove_isolated_nodes:
             knowledge_graph.remove_isolated_nodes()
 
@@ -464,6 +468,11 @@ class KnowledgeGraphBuilder:
         )
 
         knowledge_graph.community_summary = summary
+
+        knowledge_graph.save_community_summary(
+            os.path.join(storage_run_dir, DEFAULT_FILENAMES["summary_name"])  # type: ignore
+        )
+
         knowledge_graph.artifacts = GraphArtifacts(
             entities=entities,
             relations=relationships,
