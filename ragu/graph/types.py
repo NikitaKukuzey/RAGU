@@ -17,6 +17,7 @@ class Relation:
     source_entity: Entity
     target_entity: Entity
     description: str
+    relation_strength: int | float=1.0
 
 
 @dataclass

@@ -1,6 +1,5 @@
 # Based on https://github.com/gusye1234/nano-graphrag/blob/main/nano_graphrag/
 
-from collections import Counter
 from ragu.utils.parse_json_output import combine_report_text
 
 
@@ -9,6 +8,7 @@ async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
     for node_d in node_datas:
         if knowledge_graph.graph.has_node(node_d["entity_name"]):
             all_related_edges.extend(list(knowledge_graph.graph.edges(node_d["entity_name"])))
+
     all_edges = []
     seen = set()
     for this_edges in all_related_edges:
@@ -19,14 +19,15 @@ async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
 
     all_edges_pack = [knowledge_graph.get_edge(e[0], e[1]) for e in all_edges]
     all_edges_degree = [knowledge_graph.edge_degree(e[0], e[1]) for e in all_edges]
-
     all_edges_data = [
         {"source_entity": k[0], "target_entity": k[1], "rank": d, **v}
         for k, v, d in zip(all_edges, all_edges_pack, all_edges_degree)
         if v is not None
     ]
     all_edges_data = sorted(
-        all_edges_data, key=lambda x: x["rank"], reverse=True
+        all_edges_data,
+        key=lambda x: (x["rank"], x["weight"]),
+        reverse=True
     )
 
     return all_edges_data
@@ -62,8 +63,8 @@ async def _find_most_related_text_unit_from_entities(node_datas, chunks_db, know
             relation_counts = 0
             for e in this_edges:
                 if (
-                        e[1] in all_one_hop_text_units_lookup
-                        and c_id in all_one_hop_text_units_lookup[e[1]]
+                    e[1] in all_one_hop_text_units_lookup
+                    and c_id in all_one_hop_text_units_lookup[e[1]]
                 ):
                     relation_counts += 1
             all_text_units_lookup[c_id] = {
