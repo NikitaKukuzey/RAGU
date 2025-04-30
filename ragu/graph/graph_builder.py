@@ -201,6 +201,13 @@ class EntitySummarizer:
             parsed["description"] if (parsed := extract_json(resp)) else None
             for resp in responses
         ]
+        if len(responses) != len(multi_desc):
+            logging.warning(
+                f"Failed to summarize some descriptions. "
+                f"Number of summarized descriptions is {len(responses)}, but number of descriptions to summarize was {len(multi_desc)}"
+                "Return descriptions as it is (without LLM summarization)"
+            )
+            return data
 
         multi_desc.loc[:, "description"] = responses
         multi_desc.dropna(inplace=True)
@@ -277,6 +284,14 @@ class RelationSummarizer:
             parsed["description"] if (parsed := extract_json(resp)) else None
             for resp in responses
         ]
+
+        if len(responses) != len(multi_desc):
+            logging.warning(
+                f"Failed to summarize some descriptions. "
+                f"Number of summarized descriptions is {len(responses)}, but number of descriptions to summarize was {len(multi_desc)}"
+                "Return descriptions as it is (without LLM summarization)"
+            )
+            return data
 
         multi_desc.loc[:, "relationship_description"] = responses
         multi_desc.dropna(inplace=True)
