@@ -18,7 +18,6 @@ current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 # Folder for current run
 current_run = os.path.join(working_dir, current_time)
 os.makedirs(current_run, exist_ok=True)
-logging.info(f"Creating run folder {current_run}")
 
 # Folders that store knowledge graph outputs and indexer data
 logs_dir = os.path.join(current_run, "logs")

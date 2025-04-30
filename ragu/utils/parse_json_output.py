@@ -2,7 +2,7 @@ import re
 import json
 
 
-from ragu.common.logger import ragu_logger
+from ragu.common.logger import logging
 from ragu.common.decorator import no_throw
 
 
@@ -13,7 +13,7 @@ def extract_json(text: str):
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
-            ragu_logger.warning(f"Bad JSON: {text}")
+            logging.warning(f"Bad JSON: {text}")
     return None
 
 
@@ -21,7 +21,7 @@ def combine_report_text(report: dict):
     """
     Combine different sections of a report into a single text.
 
-    :param report: The report containing title, summary, and findings.
+    :param report: The report contains title, summary, and findings.
     :return: A combined text representation of the report.
     """
     if not report:
