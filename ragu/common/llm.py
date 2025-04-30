@@ -1,5 +1,5 @@
 import importlib.util
-from http.client import responses
+import logging
 
 from openai import OpenAI
 from ragu.common.decorator import no_throw
@@ -99,7 +99,6 @@ class RemoteLLM(BaseLLM):
         """
         Generates a response from the LLM based on user queries.
 
-        :param remove_none:
         :param queries: A single query string or a list of query strings.
         :param system_prompt: System-level prompt to provide context.
         :param model_name: Optional model name override.
@@ -126,21 +125,28 @@ class RemoteLLM(BaseLLM):
         ]
 
         for _ in range(self.trials):
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                **kwargs
-            )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    **kwargs
+                )
 
-            if response.choices:
-                if response.usage.total_tokens is not None:
-                    self.statistics["total_tokens"] += response.usage.total_tokens
-                if response.usage.completion_tokens is not None:
-                    self.statistics["completion_tokens"] += response.usage.completion_tokens
-                if response.usage.prompt_tokens is not None:
-                    self.statistics["prompt_tokens"] += response.usage.prompt_tokens
+                if not response.choices:
+                    continue
+
+                usage = response.usage
+                if usage:
+                    self.statistics["total_tokens"] += usage.total_tokens or 0
+                    self.statistics["completion_tokens"] += usage.completion_tokens or 0
+                    self.statistics["prompt_tokens"] += usage.prompt_tokens or 0
 
                 return response.choices[0].message.content
+
+            except Exception as e:
+                logging.error(f"Failed to generate response: {e}")
+                return None
+
         return None
 
 

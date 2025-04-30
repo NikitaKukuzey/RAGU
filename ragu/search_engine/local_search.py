@@ -106,13 +106,16 @@ class LocalSearchEngine(BaseEngine):
     def query(self, query: str) -> str:
         """
         Perform RAG on knowledge graph using the local context.
-        :param query: user query
+        :param query: User query
         :return: RAG response
         """
-        from ragu.utils.default_prompts.search_engine_query_prompts import system_prompt, query_prompts
+        from ragu.utils.default_prompts.search_engine_query_prompts import (
+            system_prompt,
+            local_search_engine_prompt
+        )
 
         context: SearchResult = asyncio.run(self.search(query))
         return self.client.generate(
-            query_prompts.format(query=query, context=str(context)),
+            local_search_engine_prompt.format(query=query, context=str(context)[:10000]),
             system_prompt
         )[0]

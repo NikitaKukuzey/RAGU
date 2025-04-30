@@ -1,7 +1,7 @@
 import asyncio
 import os
 from typing import List, Tuple, Any, Hashable, Dict, Type
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
 import pandas as pd
 import networkx as nx
@@ -51,6 +51,7 @@ class GraphConstructor:
                 source,
                 target,
                 description=relation.description,
+                weight=relation.relation_strength
             )
         return graph
 
@@ -128,7 +129,7 @@ class CommunitySummarizer:
                 )
 
         if len(summaries) != len(communities):
-            logging.warn(
+            logging.warning(
                 f"Some community were missed. Number of communities in graph is {len(communities)}, but number of summaries is {len(summaries)}"
             )
 
@@ -200,6 +201,13 @@ class EntitySummarizer:
             parsed["description"] if (parsed := extract_json(resp)) else None
             for resp in responses
         ]
+        if len(responses) != len(multi_desc):
+            logging.warning(
+                f"Failed to summarize some descriptions. "
+                f"Number of summarized descriptions is {len(responses)}, but number of descriptions to summarize was {len(multi_desc)}"
+                "Return descriptions as it is (without LLM summarization)"
+            )
+            return data
 
         multi_desc.loc[:, "description"] = responses
         multi_desc.dropna(inplace=True)
@@ -218,7 +226,7 @@ class RelationSummarizer:
         """
         Extracts and summarizes relationship descriptions from raw data.
 
-        :param relationships_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', 'relationship_description' and 'chunk_id'.
+        :param relationships_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', 'relationship_description/strength' and 'chunk_id'.
         :param client: LLM client used for summarization.
         :return: DataFrame with summarized relationship descriptions.
         :param summarize_with_llm: Whether to summarize the relation descriptions with the LLM client.
@@ -238,6 +246,7 @@ class RelationSummarizer:
         """
         return relationships.groupby(["source_entity", "target_entity"]).agg({
             "relationship_description": " ".join,
+            "relationship_strength": "mean",
             "chunk_id": lambda x: list(set(x))  # Get only unique chunks id
         }).assign(description_count=lambda df: df["chunk_id"].apply(len)).reset_index()
 
@@ -275,6 +284,14 @@ class RelationSummarizer:
             parsed["description"] if (parsed := extract_json(resp)) else None
             for resp in responses
         ]
+
+        if len(responses) != len(multi_desc):
+            logging.warning(
+                f"Failed to summarize some descriptions. "
+                f"Number of summarized descriptions is {len(responses)}, but number of descriptions to summarize was {len(multi_desc)}"
+                "Return descriptions as it is (without LLM summarization)"
+            )
+            return data
 
         multi_desc.loc[:, "relationship_description"] = responses
         multi_desc.dropna(inplace=True)
@@ -364,7 +381,7 @@ class KnowledgeGraphBuilder:
         """
         Converts a DataFrame of relationships into a list of Relation objects.
 
-        :param relations_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description'.
+        :param relations_df: DataFrame containing relationship data with columns 'source_entity', 'target_entity', and 'relationship_description/strength'.
         :param nodes: List of Entity objects used to map entities to their corresponding nodes.
         :return: List of Relation objects representing relationships between entities.
         """
@@ -375,6 +392,7 @@ class KnowledgeGraphBuilder:
             source_entity = row["source_entity"]
             target_entity = row["target_entity"]
             description = row["relationship_description"]
+            strength=row["relationship_strength"]
 
             source_node = entity_to_node.get(source_entity)
             target_node = entity_to_node.get(target_entity)
@@ -384,7 +402,8 @@ class KnowledgeGraphBuilder:
                     Relation(
                         source_entity=source_node,
                         target_entity=target_node,
-                        description=description
+                        description=description,
+                        relation_strength=strength
                     )
                 )
         return relationships
