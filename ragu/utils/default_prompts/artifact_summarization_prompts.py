@@ -7,9 +7,9 @@ artifacts_summarization_prompt["summarize_entity_descriptions"] = """
 
 Верни ответ строго в формате json следующей структуры: 
 '''
-{{
+{
     "description": "суммаризированное описание"
-}}
+}
 '''
 
 Данные:
@@ -22,9 +22,9 @@ artifacts_summarization_prompt["summarize_relation_descriptions"] = """
 
 Верни ответ строго в формате json следующей структуры: 
 '''
-{{
+{
     "description": "суммаризированное описание"
-}}
+}
 '''
 
 Данные:
