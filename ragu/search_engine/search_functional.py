@@ -1,7 +1,15 @@
 # Based on https://github.com/gusye1234/nano-graphrag/blob/main/nano_graphrag/
 
 from ragu.utils.parse_json_output import combine_report_text
+from ragu.utils.parse_json_output import extract_json
 
+
+def default_extractor(x): return x
+
+def global_search_default_extractor(x: str):
+    outputs = extract_json(x)
+    if outputs is None: return x
+    return outputs["response"] if outputs.get("response") else x
 
 async def _find_most_related_edges_from_entities(node_datas, knowledge_graph):
     all_related_edges = []
@@ -63,8 +71,8 @@ async def _find_most_related_text_unit_from_entities(node_datas, chunks_db, know
             relation_counts = 0
             for e in this_edges:
                 if (
-                    e[1] in all_one_hop_text_units_lookup
-                    and c_id in all_one_hop_text_units_lookup[e[1]]
+                        e[1] in all_one_hop_text_units_lookup
+                        and c_id in all_one_hop_text_units_lookup[e[1]]
                 ):
                     relation_counts += 1
             all_text_units_lookup[c_id] = {
