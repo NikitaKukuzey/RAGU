@@ -9,6 +9,7 @@ DEFAULT_FILENAMES = {
     "relation_vdb_name": "relation_vdb.json",
     "chunks_vdb_name": "chunks_vdb.json",
     "graph_name": "graph.gml",
+    "summary_name": "summary.json"
 }
 
 current_dir = os.getcwd()
