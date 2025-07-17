@@ -36,7 +36,7 @@ class KnowledgeGraph:
         Initializes the KnowledgeGraph pipeline with configured components for chunking and triplet extraction
         """
         self.graph: nx.Graph = None
-        self.community_summary: dict = None
+        self.community_summary: list = None
         self.artifacts: "GraphArtifacts" = None
 
         if path_to_graph:

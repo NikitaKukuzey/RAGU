@@ -2,18 +2,18 @@
 
 import asyncio
 
+from ragu.common.embedder import BaseEmbedder
 from ragu.common.index import Index
 from ragu.common.llm import BaseLLM
-from ragu.search_engine.base_engine import BaseEngine
 from ragu.graph.knowledge_graph import KnowledgeGraph
-from ragu.common.embedder import BaseEmbedder
+from ragu.search_engine.base_engine import BaseEngine
 from ragu.search_engine.search_functional import (
-    _find_most_related_text_unit_from_entities,
+    _find_most_related_community_from_entities,
     _find_most_related_edges_from_entities,
-    _find_most_related_community_from_entities
+    _find_most_related_text_unit_from_entities,
 )
-
 from ragu.search_engine.types import SearchResult
+from ragu.utils.ragu_utils import TokenTruncation
 
 
 class LocalSearchEngine(BaseEngine):
@@ -28,14 +28,21 @@ class LocalSearchEngine(BaseEngine):
         knowledge_graph: KnowledgeGraph,
         embedder: BaseEmbedder,
         index: Index,
+        max_context_length: int = 30_000,
+        tokenizer_backend: str = "tiktoken",
+        tokenizer_model: str = "gpt-4",
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
+
+        self.truncation = TokenTruncation(
+            tokenizer_model,
+            tokenizer_backend,
+            max_context_length
+        )
+
         self.community_reports = None
-        self.llm_response_cache = None
-        self.text_chunks = None
-        self.full_docs = None
         self.graph = knowledge_graph
         self.embedder = embedder
         self.index = index
@@ -110,12 +117,13 @@ class LocalSearchEngine(BaseEngine):
         :return: RAG response
         """
         from ragu.utils.default_prompts.search_engine_query_prompts import (
+            local_search_engine_prompt,
             system_prompt,
-            local_search_engine_prompt
         )
 
         context: SearchResult = asyncio.run(self.search(query))
+        truncated_contest: str = self.truncation(str(context))
         return self.client.generate(
-            local_search_engine_prompt.format(query=query, context=str(context)[:10000]),
+            local_search_engine_prompt.format(query=query, context=truncated_contest),
             system_prompt
         )[0]

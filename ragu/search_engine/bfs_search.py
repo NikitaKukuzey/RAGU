@@ -1,11 +1,16 @@
+import asyncio
 import string
 from itertools import combinations
 from typing import List
+
+import pandas as pd
 
 from ragu.search_engine.base_engine import BaseEngine
 from ragu.graph.knowledge_graph import KnowledgeGraph
 from ragu.triplet.base_triplet import TripletExtractor
 from ragu.common.llm import BaseLLM
+from ragu.search_engine.types import SearchResult
+from ragu.utils.hash import compute_mdhash_id
 
 
 class BFSEngine(BaseEngine):
@@ -52,7 +57,7 @@ class BFSEngine(BaseEngine):
             query_entities=query_entities,
             max_depth=depth
         )
-        return entities, relations
+        return SearchResult(entities=entities, relations=relations, summaries=[], chunks=[])
 
     def query(self, query: str, depth: int=2):
         """
@@ -62,7 +67,9 @@ class BFSEngine(BaseEngine):
         :param query: The input query.
         :return: The generated response from the LLM.
         """
-        entity_context, relationship_context = self.search(query, depth)
+        context: SearchResult = self.search(query, depth)
+
+        entity_context, relationship_context = context.entities, context.relations
 
         entities_list = "\n".join([f"{entity[0]}, {entity[1]}" for entity in entity_context])
         relationship_list = "\n".join([f"{entity[0]}, {entity[1]}, {entity[2]}" for entity in relationship_context])
@@ -101,7 +108,13 @@ class BFSEngine(BaseEngine):
         :type query: str
         :return: A list of extracted entity_name names.
         """
-        entities, _ = self.artifacts_extractor.extract_entities_and_relationships([query], client=self.client)
+        query = pd.DataFrame(
+            {
+                "chunk": [query],
+                "chunk_id": compute_mdhash_id(query)
+            }
+        )
+        entities, _ = self.artifacts_extractor.extract_entities_and_relationships(query, client=self.client)
         entities = entities.drop_duplicates('entity_name')
         return self._get_all_possible_entities(entities["entity_name"].tolist())
 
