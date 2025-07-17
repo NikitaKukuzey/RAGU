@@ -7,7 +7,7 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 
-from ragu import Chunker
+from ragu.chunker.base_chunker import Chunker
 from ragu.storage.base_storage import BaseKVStorage
 from ragu.storage.json_storage import JsonKVStorage
 from ragu.triplet.base_triplet import TripletExtractor
