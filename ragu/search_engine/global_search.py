@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from ragu.common.index import Index
@@ -41,7 +42,10 @@ class GlobalSearchEngine(BaseEngine):
 
         self.extractor = extractor
 
-    async def search(self, query, *args, **kwargs):
+    def build_index(self):
+        pass
+
+    async def a_search(self, query, *args, **kwargs):
         responses: list[str] = []
         for community_cluster_id in await self.index.communities_kv_storage.all_keys():
             try:
@@ -55,8 +59,8 @@ class GlobalSearchEngine(BaseEngine):
 
         return "\n".join([r.get("response", "") for r in responses])
 
-    def build_index(self):
-        pass
+    def search(self, query, *args, **kwargs):
+        return asyncio.run(self.a_search(query, *args, **kwargs))
 
     async def get_meta_responses(self, query: str, context: str) -> str:
         output = self.client.generate(
@@ -67,8 +71,11 @@ class GlobalSearchEngine(BaseEngine):
         output_dict = extract_json(output)
         return output_dict
 
-    async def query(self, query: str):
-        context = await self.search(query)
+    def query(self, query: str) -> str:
+        return asyncio.run(self.a_query(query))
+
+    async def a_query(self, query: str):
+        context = await self.a_search(query)
         truncated_context: str = self.truncation(str(context))
 
         output = self.client.generate(

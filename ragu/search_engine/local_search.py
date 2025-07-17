@@ -51,7 +51,7 @@ class LocalSearchEngine(BaseEngine):
     async def build_index(self):
         pass
 
-    async def search(self, query: str, top_k: int = 20, *args, **kwargs) -> SearchResult:
+    async def a_search(self, query: str, top_k: int = 20, *args, **kwargs) -> SearchResult:
         """
         Find the most related entities/chunks/relations to the given query.
 
@@ -110,7 +110,7 @@ class LocalSearchEngine(BaseEngine):
 
         return search_result
 
-    def query(self, query: str) -> str:
+    async def a_query(self, query: str):
         """
         Perform RAG on knowledge graph using the local context.
         :param query: User query
@@ -121,9 +121,15 @@ class LocalSearchEngine(BaseEngine):
             system_prompt,
         )
 
-        context: SearchResult = asyncio.run(self.search(query))
+        context: SearchResult = await self.a_search(query)
         truncated_contest: str = self.truncation(str(context))
         return self.client.generate(
             local_search_engine_prompt.format(query=query, context=truncated_contest),
             system_prompt
         )[0]
+
+    def search(self, query, *args, **kwargs) -> SearchResult:
+        return asyncio.run(self.a_search(query, *args, **kwargs))
+
+    def query(self, query, *args, **kwargs) -> str:
+        return asyncio.run(self.a_query(query))
