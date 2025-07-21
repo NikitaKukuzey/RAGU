@@ -144,6 +144,53 @@ z
 Текст:
 """
 
+json_prompt = """
+**-Цель-**  
+Дан текстовый документ и список типов сущностей, связей. Необходимо выявить все сущности указанных типов в тексте, а также все связи между найденными сущностями.  
+
+**-Шаги-**  
+1. **Идентификация всех сущностей.**  
+   Для каждой найденной сущности извлечь следующую информацию:  
+   - **name**: Нормализованное название сущности с заглавной буквы. 
+    Под нормализацией подразумевается приведение слова к начальной форме. 
+    Пример: рождеству -> Рождество, кошек -> Кошки, Павла -> Павел.
+   - **entity_type**: Тип сущности. Допустимые типы: AGE AWARD CITY COUNTRY CRIME DATE DISEASE DISTRICT EVENT FACILITY FAMILY IDEOLOGY LANGUAGE LAW LOCATION MONEY NATIONALITY NUMBER ORDINAL ORGANIZATION PENALTY PERCENT PERSON PRODUCT PROFESSION RELIGION STATE_OR_PROVINCE TIME WORK_OF_ART
+   - **description**: Подробное описание сущности по приведенному тексту. Описание должно быть точным и максимально полным. 
+
+2. **Определение связей между сущностями.**  
+   На основе сущностей, найденных на первом шаге, определить все пары (**source_entity**, **target_entity**), которые *явно связаны* между собой.  
+   Для каждой такой пары извлечь следующую информацию:
+   - **first_entity**: Название исходной сущности (как определено в шаге 1)  
+   - **second_entity**: Название целевой сущности (как определено в шаге 1)
+   - **rel_type**: Тип отношения между двумя сущностями. Допустимые типы: ABBREVIATION KNOWS AGE_IS AGE_DIED_AT ALTERNATIVE_NAME AWARDED_WITH PLACE_OF_BIRTH CAUSE_OF_DEATH DATE_DEFUNCT_IN DATE_FOUNDED_IN DATE_OF_BIRTH DATE_OF_CREATION DATE_OF_DEATH POINT_IN_TIME PLACE_OF_DEATH FOUNDED_BY HEADQUARTERED_IN IDEOLOGY_OF LOCATED_IN SPOUSE MEDICAL_CONDITION MEMBER_OF ORGANIZES ORIGINS_FROM OWNER_OF PARENT_OF PLACE_RESIDES_IN PRICE_OF PRODUCES RELATIVE RELIGION_OF SCHOOLS_ATTENDED SIBLING SUBEVENT_OF SUBORDINATE_OF TAKES_PLACE_IN WORKPLACE WORKS_AS START_TIME END_TIME CONVICTED_OF PENALIZED_AS PART_OF HAS_CAUSE AGENT PARTICIPANT_IN INANIMATE_INVOLVED EXPENDITURE INCOME
+   - **description**: Описание связи между двумя сущностями. 
+   - **strength**: Числовой показатель, отражающий силу связи между сущностями в диапазоне от 0 до 10, где 0 - слабая связь, 10 - сильная связь.
+
+3. **Вывести результат на русском языке** СТРОГО в следующем виде, без добавочных символов(кавычек, обозначение и т.д.):
+{
+    "entities": [
+        {{
+            "name": "<название сущности>",
+            "entity_type": "<тип сущности>",
+            "description": "<описание сущности>"
+        }}
+    ],
+    "relations": [
+        {{
+            "first_entity": "<название первой сущности>",
+            "second_entity": "<название второй сущности>",
+            "rel_type": "<тип отношения между сущностями>",
+            "description": "<описание связи>",
+            "strength": "<сила связи>"
+        }}
+    ]
+}
+4. **Проверь ответ на формат json**, содержит только данные в формате json.
+
+Текст:
+{text}
+"""
+
 def _generate_prompt(input_prompt, **kwargs):
     return input_prompt.format(**kwargs)
 

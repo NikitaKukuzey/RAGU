@@ -7,6 +7,9 @@ from ragu.common.logger import logging
 
 @no_throw
 def extract_json(text: str):
+    text = text.replace("<think>", "")
+    text = text.replace("</think>", "")
+    text = text.strip()
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if match:
         try:

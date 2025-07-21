@@ -65,6 +65,18 @@ class SimpleChunker(Chunker):
         return pd.DataFrame({"chunk": chunks, "chunk_id": chunk_id})
 
 
+@Chunker.register("jsonpass")
+class JsonPassChunker(Chunker):
+    def __init__(self):
+        super().__init__()
+
+    def split(self, documents: str | List[str]) -> pd.DataFrame:
+        if isinstance(documents, str):
+            documents = [documents]
+        chunk_id = list(range(len(documents)))
+
+        return pd.DataFrame({"chunk": documents, "chunk_id": chunk_id})
+
 @Chunker.register("semantic")
 class SemanticTextChunker(Chunker):
     """
