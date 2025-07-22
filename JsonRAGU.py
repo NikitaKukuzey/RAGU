@@ -17,10 +17,11 @@ import json
 LLM_MODEL_NAME = "..."
 LLM_BASE_URL = "..."
 LLM_API_KEY = "..."
+
 client = LocalLLM("Qwen/Qwen3-0.6B")
 
 # Getting documents from folders with .txt files
-text = read_text_from_files('texts')
+text = read_text_from_files('path/to/texts')
 
 # Initialize a chunker
 chunker = SmartSemanticChunker(

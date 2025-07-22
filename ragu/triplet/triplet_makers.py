@@ -1,7 +1,7 @@
 from os import system
 import json
 
-import requests
+#import requests
 import pandas as pd
 from typing import List, Tuple
 from tqdm import tqdm
@@ -440,7 +440,7 @@ class JsonPassTripletLLM(TripletExtractor):
         :return: A list of extracted triplets from all elements.
         """
         return self.extract_entities_and_relationships(chunks_df, *args, **kwargs)
-
+'''
 # TODO: add relation extraction and definition generation
 @TripletExtractor.register("composed")
 class ComposedTripletExtractor(TripletExtractor):
@@ -480,3 +480,4 @@ class ComposedTripletExtractor(TripletExtractor):
 
         data = [(text[start:end], ent_type, start, end) for start, end, ent_type in entities if ent_type in self.valid_entities]
         return pd.DataFrame(data, columns=["entity_name", "entity_type", "start", "end"])
+'''
