@@ -1,4 +1,4 @@
-from ragu.utils.io_utils import read_text_from_files
+from ragu.utils.io_utils import read_text_from_files, read_text_from_chegeka
 from ragu.common.llm import RemoteLLM, LocalLLM
 from ragu.graph.graph_builder import KnowledgeGraphBuilder, KnowledgeGraph
 
@@ -14,18 +14,20 @@ import json
 
 
 # You can load your creditals from .env. Look into ragu/common/setting.py
-LLM_MODEL_NAME = "..."
-LLM_BASE_URL = "..."
-LLM_API_KEY = "..."
+#LLM_MODEL_NAME = "..."
+#LLM_BASE_URL = "..."
+#LLM_API_KEY = "..."
 
-client = LocalLLM("Qwen/Qwen3-0.6B")
+PATH_TO_CHEGEKA = "..."
+
+client = LocalLLM("path/to/our/model")
 
 # Getting documents from folders with .txt files
-text = read_text_from_files('path/to/texts')
+text = read_text_from_chegeka(PATH_TO_CHEGEKA + '/' + 'docucuments.json')
 
 # Initialize a chunker
 chunker = SmartSemanticChunker(
-    reranker_name="/path/to/reranker_model", #BAAI/bge-reranker-v2-m3 - рекомендовано использовать
+    reranker_name="BAAI/bge-reranker-v2-m3", #BAAI/bge-reranker-v2-m3 - рекомендовано использовать
     max_chunk_length=1024
 )
 
