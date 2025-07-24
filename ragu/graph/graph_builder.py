@@ -421,10 +421,11 @@ class KnowledgeGraphBuilder:
 
         # Step 1: Split documents into chunks
         chunks = self.chunker(documents)
-
+        logging.info("Text splitted into chunks")
         # Step 2: Extract entities, relationships, and their descriptions
+        logging.info("Start extracting ER with LLM")
         entities, relationships = self.triplet_extractor(chunks, client=self.client)
-
+        logging.info("Start summarizing graph")
         # Step 3: Summarize entities' and relationships' descriptions
         summarized_entities = EntitySummarizer.extract_summary(
             entities,
@@ -432,13 +433,14 @@ class KnowledgeGraphBuilder:
             batch_size=self.batch_size,
             summarize_with_llm=self.summarize_entities
         )
+        logging.info("Entities summarized")
         summarized_relationships = RelationSummarizer.extract_summary(
             relationships,
             client=self.client,
             batch_size=self.batch_size,
             summarize_with_llm=self.summarize_relations
         )
-
+        logging.info("Relationships summarized")
         # Step 4: Construct the graph
         nodes = self._get_nodes(summarized_entities)
         edges = self._get_edges(summarized_relationships, nodes)
