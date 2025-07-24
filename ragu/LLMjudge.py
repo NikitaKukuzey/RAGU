@@ -69,6 +69,8 @@ def ask_llm_qwen_local(answer1: str, answer2: str, llm_pipe) -> float:
     try:
         result = float(generated_text)
         print(f"Сгенерированный результат: {result}")
+        if result != 0.0:
+            result = 1
         return result
     except ValueError:
         print(f"Ошибка: Не удалось преобразовать '{generated_text}' в число. Возвращаем 0.0.")
