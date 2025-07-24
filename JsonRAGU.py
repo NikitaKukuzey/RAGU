@@ -31,7 +31,7 @@ logging.info("Parsing chegeka finished")
 # Initialize a chunker
 logging.info("Initializing Chunker started")
 chunker = SimpleChunker(
-    max_chunk_length=1024,
+    max_chunk_size=1024,
     overlap=0
 )
 logging.info("Initializing Chunker finished")
