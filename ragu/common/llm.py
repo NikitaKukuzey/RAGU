@@ -184,7 +184,8 @@ class VLLMClient(BaseLLM):
             **vllm_kwargs,
         )
 
-        self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048}))
+        self.sampling_params = vllm.SamplingParams(**(sampling_params or {"max_tokens": 2048, "extra_body": {
+            "chat_template_kwargs": {"enable_thinking": False}}}))
 
     @no_throw
     def generate(self, queries: str | list[str], system_prompt: str, remove_none: bool = True, **kwargs):
