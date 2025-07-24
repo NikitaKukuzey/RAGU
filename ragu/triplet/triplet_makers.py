@@ -362,13 +362,14 @@ class JsonTripletLLM(TripletExtractor):
             relations = pd.DataFrame(columns=self.RELATION_COLUMNS[:-1])
             try:
                 dct = parse_func(raw)
+                #print(dct)
                 ent_id = 0
                 rel_id = 0
                 for ent in dct["entities"]:
-                    entities.loc[ent_id] = [ent["name"], ent["entity_type"], ent["description"], 0]
+                    entities.loc[ent_id] = [ent["name"], ent["entity_type"], ent["description"]]
                     ent_id += 1
                 for rel in dct["relations"]:
-                    relations.loc[rel_id] = [rel["first_entity"], rel["second_entity"], rel["description"], rel["strength"], 0]
+                    relations.loc[rel_id] = [rel["first_entity"], rel["second_entity"], rel["description"], rel["strength"]]
                     rel_id += 1
             except Exception as e:
                 logging.error(f"Parse error: {e}\nRaw data: {raw}")

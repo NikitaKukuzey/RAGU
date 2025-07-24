@@ -207,7 +207,13 @@ class VLLMClient(BaseLLM):
             for query in queries
         ]
 
-        outputs = self.engine.chat(batched_prompts, self.sampling_params)
+        chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
+
+        outputs = self.engine.chat(
+            batched_prompts,
+            self.sampling_params,
+            chat_template_kwargs=chat_template_kwargs  # <-- ключевая строка
+        )
         responses = [output.outputs[0].text for output in outputs]
 
         try:
