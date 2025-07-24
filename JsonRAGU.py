@@ -4,7 +4,7 @@ from ragu.graph.graph_builder import KnowledgeGraphBuilder, KnowledgeGraph
 
 from ragu.search_engine.local_search import LocalSearchEngine
 from ragu.common.embedder import STEmbedder
-from ragu.chunker.chunkers import SmartSemanticChunker, JsonPassChunker
+from ragu.chunker.chunkers import SimpleChunker, JsonPassChunker
 from ragu.triplet.triplet_makers import TripletLLM, JsonTripletLLM
 from ragu.common.index import Index
 
@@ -18,15 +18,15 @@ import json
 #LLM_BASE_URL = "..."
 #LLM_API_KEY = "..."
 
-PATH_TO_CHEGEKA = "..."
+PATH_TO_CHEGEKA = "./chegeka"
 
-client = VLLMClient("path/to/our/model")
+client = VLLMClient("path/to/our/model") #todo прописать путь до модели
 
 # Getting documents from folders with .txt files
 text = read_text_from_chegeka(PATH_TO_CHEGEKA + '/' + 'documents.json')
 
 # Initialize a chunker
-chunker = SmartSemanticChunker(
+chunker = SimpleChunker(
     reranker_name="BAAI/bge-reranker-v2-m3", #BAAI/bge-reranker-v2-m3 - рекомендовано использовать
     max_chunk_length=1024
 )
@@ -56,4 +56,4 @@ graph_builder = KnowledgeGraphBuilder(
 knowledge_graph = graph_builder.build(text)
 
 # Save results
-knowledge_graph.save_graph("graph.gml").save_community_summary("summary.json")
+knowledge_graph.save_graph("./results/graph.gml").save_community_summary("./results/summary.json") # todo уточнить папку

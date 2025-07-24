@@ -14,11 +14,11 @@ import pandas as pd
 import numpy as np
 import json
 
-PATH_TO_CHEGEKA=""
+PATH_TO_CHEGEKA="./chegeka"
 
 client = LocalLLM("yandex/YandexGPT-5-Lite-8B-instruct")
 
-knowledge_graph = KnowledgeGraph(path_to_graph="path/to/graph", path_to_community_summary="path/to/community")
+knowledge_graph = KnowledgeGraph(path_to_graph="path/to/graph", path_to_community_summary="path/to/community") #todo уточнить папку
 
 embedder = STEmbedder("SentenceTransformer", trust_remote_code=True)
 index = Index(embedder=embedder)
