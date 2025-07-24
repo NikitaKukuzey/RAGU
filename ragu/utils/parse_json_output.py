@@ -5,18 +5,39 @@ from ragu.common.decorator import no_throw
 from ragu.common.logger import logging
 
 
+def check_quotes(text):
+    lsts = text.split("\n")
+    #print(lsts)
+    for i in range(len(lsts)):
+        if ("\"name\": " in lsts[i]) or ("\"description\": " in lsts[i]) or ("\"first_entity\": " in lsts[i]) or ("\"second_entity\": " in lsts[i]):
+            n = lsts[i].count("\"")
+            #print(n)
+            if n > 4:
+                ln = len(lsts[i])
+                ind = lsts[i].find("\"", 0, ln)
+                ind = lsts[i].find("\"", ind + 1, ln)
+                ind = lsts[i].find("\"", ind + 1, ln)
+                start = lsts[i][:ind + 1]
+                end = lsts[i][ind + 1:]
+                lsts[i] = start + end.replace("\"", "\'", n - 4)
+    return "\n".join(lsts)
+
 @no_throw
 def extract_json(text: str):
     text = text.replace("<think>", "")
     text = text.replace("</think>", "")
     text = text.replace("assistant", "")
+    text = text.replace("\"\"", "\"")
     text = text.strip()
+    text = text.replace('"enity_type"', '"entity_type"').replace('"desccription"', '"description"').replace('\\""', '\\"')
+    text = check_quotes(text)
     match = re.search(r'\{.*\}', text, re.DOTALL)
+    #print(match.group())
     if match:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
-            logging.warning(f"Bad JSON: {text}")
+            print(f"Bad JSON")
     return None
 
 

@@ -365,7 +365,7 @@ class JsonTripletLLM(TripletExtractor):
                 ent_id = 0
                 rel_id = 0
                 for ent in dct["entities"]:
-                    entities.loc[ent_id] = [ent["name"], ent["enity_type"], ent["description"], 0]
+                    entities.loc[ent_id] = [ent["name"], ent["entity_type"], ent["description"], 0]
                     ent_id += 1
                 for rel in dct["relations"]:
                     relations.loc[rel_id] = [rel["first_entity"], rel["second_entity"], rel["description"], rel["strength"], 0]

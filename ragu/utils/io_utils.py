@@ -34,6 +34,8 @@ def read_text_from_chegeka(file: str) -> List[str]:
     texts = []
     for el in dct:
         texts.append(el["page_content"])
+        if el["id"] == 100:
+            break
     return texts
 
 def read_qa_from_chegeka(file: str):
@@ -47,4 +49,6 @@ def read_qa_from_chegeka(file: str):
         topic = el["inputs"]["topic"]
         question = el["instruction"].format(text=txt, topic=topic)
         qas.append((question, el["outputs"]))
+        if el["meta"]["id"] == 53:
+            break
     return qas
