@@ -1,5 +1,5 @@
 from ragu.utils.io_utils import read_text_from_files, read_text_from_chegeka
-from ragu.common.llm import RemoteLLM, LocalLLM
+from ragu.common.llm import RemoteLLM, LocalLLM, VLLMClient
 from ragu.graph.graph_builder import KnowledgeGraphBuilder, KnowledgeGraph
 
 from ragu.search_engine.local_search import LocalSearchEngine
@@ -20,10 +20,10 @@ import json
 
 PATH_TO_CHEGEKA = "..."
 
-client = LocalLLM("path/to/our/model")
+client = VLLMClient("path/to/our/model")
 
 # Getting documents from folders with .txt files
-text = read_text_from_chegeka(PATH_TO_CHEGEKA + '/' + 'docucuments.json')
+text = read_text_from_chegeka(PATH_TO_CHEGEKA + '/' + 'documents.json')
 
 # Initialize a chunker
 chunker = SmartSemanticChunker(
